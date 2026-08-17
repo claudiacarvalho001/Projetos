@@ -127,6 +127,12 @@
   }
   .tag-custom .tag-remove{cursor:pointer;opacity:.8;font-size:10px;}
   .tag-custom .tag-remove:hover{opacity:1;}
+  .tag-add-row{display:flex;gap:8px;margin-top:8px;align-items:center;}
+  .tag-add-row input[type="text"]{flex:1;width:auto;min-width:0;}
+  .tag-add-row input[type="color"]{
+    flex:0 0 auto;width:38px;height:38px;padding:2px;border:1px solid var(--border);
+    border-radius:8px;background:var(--paper);cursor:pointer;
+  }
 
   /* CARD IMAGE */
   .card-image{width:100%;height:110px;object-fit:cover;border-radius:8px 8px 0 0;display:block;margin:-10px -12px 8px;width:calc(100% + 24px);}
@@ -491,6 +497,15 @@
   <div class="modal">
     <h2 id="modal-title">Novo projeto</h2>
     <input type="hidden" id="p-id">
+    <div class="field">
+      <label>Tags coloridas (opcional)</label>
+      <div class="tag-editor" id="p-tags-list"></div>
+      <div class="tag-add-row">
+        <input type="text" id="new-tag-text" placeholder="Nome da tag">
+        <input type="color" id="new-tag-color" value="#5B5BF6">
+        <button type="button" class="icon-btn" id="btn-add-tag">+</button>
+      </div>
+    </div>
     <div class="field"><label>Nome do projeto</label><input id="p-name" placeholder="Ex: Migração de sistema"></div>
     <div class="row2">
       <div class="field"><label>Área</label><input id="p-area" placeholder="Ex: Marketing, TI, RH..." list="area-list"><datalist id="area-list"></datalist></div>
@@ -519,15 +534,6 @@
         <select id="p-priority">
           <option>Baixa</option><option>Média</option><option>Alta</option><option>Urgente</option>
         </select>
-      </div>
-    </div>
-    <div class="field">
-      <label>Tags coloridas (opcional)</label>
-      <div class="tag-editor" id="p-tags-list"></div>
-      <div style="display:flex;gap:8px;margin-top:8px">
-        <input type="text" id="new-tag-text" placeholder="Nome da tag" style="flex:1">
-        <input type="color" id="new-tag-color" value="#5B5BF6">
-        <button type="button" class="icon-btn" id="btn-add-tag">+</button>
       </div>
     </div>
     <div class="field">
