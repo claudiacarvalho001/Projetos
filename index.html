@@ -253,6 +253,22 @@
     width:34px;height:34px;border-radius:50%;border:2px solid var(--border);cursor:pointer;position:relative;
   }
   .preset-swatch:hover{border-color:var(--ink);}
+
+  /* DASHBOARD */
+  .dash-period-bar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:20px;}
+  .dash-presets{display:flex;gap:8px;}
+  .dash-presets button.active{background:var(--primary);color:#fff;border-color:var(--primary);}
+  .dash-range{display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:12px;color:var(--ink-soft);}
+  .dash-range input{padding:8px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card-bg);font-family:var(--font-body);font-size:13px;color:var(--ink);}
+  .dash-breakdown{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  .dash-panel{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:20px 22px;box-shadow:var(--shadow-sm);}
+  .dash-panel h3{font-family:var(--font-display);font-size:14.5px;margin:0 0 16px;}
+  .dash-row{display:flex;align-items:center;gap:10px;margin-bottom:11px;font-size:13px;}
+  .dash-row:last-child{margin-bottom:0;}
+  .dash-row .label{flex:0 0 130px;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .dash-row .bar-wrap{flex:1;}
+  .dash-row .val{flex:0 0 68px;text-align:right;font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);}
+  @media (max-width:768px){ .dash-breakdown{grid-template-columns:1fr;} .dash-row .label{flex-basis:90px;} }
 </style>
 </head>
 <body>
@@ -281,6 +297,7 @@
       <div class="view-toggle">
         <button id="tab-kanban" class="active">KANBAN</button>
         <button id="tab-table">TABELA</button>
+        <button id="tab-dashboard">DASHBOARD</button>
       </div>
       <button class="btn btn-ghost" id="btn-phases">Etapas</button>
       <button class="btn btn-ghost" id="btn-managers-open">Gestores</button>
@@ -330,6 +347,25 @@
       </table>
     </div>
   </div>
+</div>
+
+<div id="view-dashboard" style="display:none">
+  <div class="dash-period-bar">
+    <div class="dash-presets">
+      <button class="btn btn-ghost" id="preset-week">Esta semana</button>
+      <button class="btn btn-ghost" id="preset-month">Este mês</button>
+      <button class="btn btn-ghost" id="preset-all">Todos os projetos</button>
+    </div>
+    <div class="dash-range">
+      <span>Período personalizado:</span>
+      <input type="date" id="dash-start">
+      <span>até</span>
+      <input type="date" id="dash-end">
+    </div>
+  </div>
+  <div class="stats-row" id="dash-stats-row"></div>
+  <div class="dash-breakdown" id="dash-breakdown"></div>
+</div>
 </div>
 </div>
 
@@ -825,8 +861,11 @@ function switchToTableView(){
   currentView = 'table';
   document.getElementById('tab-table').classList.add('active');
   document.getElementById('tab-kanban').classList.remove('active');
+  document.getElementById('tab-dashboard').classList.remove('active');
   document.getElementById('view-table').style.display='block';
   document.getElementById('view-kanban').style.display='none';
+  document.getElementById('view-dashboard').style.display='none';
+  document.getElementById('stats-row').style.display='grid';
 }
 
 function renderPhaseSelect(){
@@ -1224,26 +1263,29 @@ document.getElementById('btn-phases-done').addEventListener('click', async ()=>{
 modalPhases.addEventListener('click', e=>{ if(e.target===modalPhases) modalPhases.style.display='none'; });
 
 // ---- Views & filtros ----
-document.getElementById('tab-kanban').addEventListener('click', ()=>{
-  currentView='kanban';
+function switchView(view){
+  currentView = view;
   statusFilter = null;
-  document.getElementById('tab-kanban').classList.add('active');
-  document.getElementById('tab-table').classList.remove('active');
-  document.getElementById('view-kanban').style.display='block';
-  document.getElementById('view-table').style.display='none';
+  ['kanban','table','dashboard'].forEach(v=>{
+    document.getElementById('tab-'+v).classList.toggle('active', v===view);
+    document.getElementById('view-'+v).style.display = (v===view) ? 'block' : 'none';
+  });
+  document.getElementById('stats-row').style.display = (view==='dashboard') ? 'none' : 'grid';
   renderAll();
-});
-document.getElementById('tab-table').addEventListener('click', ()=>{
-  currentView='table';
-  statusFilter = null;
-  document.getElementById('tab-table').classList.add('active');
-  document.getElementById('tab-kanban').classList.remove('active');
-  document.getElementById('view-table').style.display='block';
-  document.getElementById('view-kanban').style.display='none';
-  renderAll();
-});
+  if(view==='dashboard'){
+    if(!dashStart && !dashEnd && !document.querySelector('.dash-presets button.active')){
+      setDashPreset('week');
+    }else{
+      renderDashboard();
+    }
+  }
+}
+document.getElementById('tab-kanban').addEventListener('click', ()=>switchView('kanban'));
+document.getElementById('tab-table').addEventListener('click', ()=>switchView('table'));
+document.getElementById('tab-dashboard').addEventListener('click', ()=>switchView('dashboard'));
+
 ['f-area','f-manager','f-priority','f-search'].forEach(id=>{
-  document.getElementById(id).addEventListener('input', renderAll);
+  document.getElementById(id).addEventListener('input', ()=>{ renderAll(); if(currentView==='dashboard') renderDashboard(); });
 });
 document.querySelectorAll('th[data-k]').forEach(th=>{
   th.addEventListener('click', ()=>{
@@ -1252,6 +1294,95 @@ document.querySelectorAll('th[data-k]').forEach(th=>{
     renderTable();
   });
 });
+
+// ---- Dashboard ----
+let dashStart = '', dashEnd = '';
+function isoDate(d){ return d.toISOString().slice(0,10); }
+function startOfWeek(d){ const day=d.getDay(); const diff=d.getDate()-day+(day===0?-6:1); return new Date(d.getFullYear(),d.getMonth(),diff); }
+function endOfWeek(d){ const s=startOfWeek(d); return new Date(s.getFullYear(),s.getMonth(),s.getDate()+6); }
+function startOfMonth(d){ return new Date(d.getFullYear(), d.getMonth(), 1); }
+function endOfMonth(d){ return new Date(d.getFullYear(), d.getMonth()+1, 0); }
+
+function setDashPreset(p){
+  const today = new Date();
+  if(p==='week'){ dashStart = isoDate(startOfWeek(today)); dashEnd = isoDate(endOfWeek(today)); }
+  else if(p==='month'){ dashStart = isoDate(startOfMonth(today)); dashEnd = isoDate(endOfMonth(today)); }
+  else if(p==='all'){ dashStart=''; dashEnd=''; }
+  document.getElementById('dash-start').value = dashStart;
+  document.getElementById('dash-end').value = dashEnd;
+  document.querySelectorAll('.dash-presets button').forEach(b=>b.classList.remove('active'));
+  document.getElementById('preset-'+p)?.classList.add('active');
+  renderDashboard();
+}
+document.getElementById('preset-week').addEventListener('click', ()=>setDashPreset('week'));
+document.getElementById('preset-month').addEventListener('click', ()=>setDashPreset('month'));
+document.getElementById('preset-all').addEventListener('click', ()=>setDashPreset('all'));
+document.getElementById('dash-start').addEventListener('change', e=>{
+  dashStart = e.target.value;
+  document.querySelectorAll('.dash-presets button').forEach(b=>b.classList.remove('active'));
+  renderDashboard();
+});
+document.getElementById('dash-end').addEventListener('change', e=>{
+  dashEnd = e.target.value;
+  document.querySelectorAll('.dash-presets button').forEach(b=>b.classList.remove('active'));
+  renderDashboard();
+});
+
+function projectInPeriod(p){
+  if(!dashStart && !dashEnd) return true;
+  const pStart = p.startDate || p.endDate;
+  const pEnd = p.endDate || p.startDate;
+  if(!pStart && !pEnd) return false;
+  if(dashStart && pEnd && pEnd < dashStart) return false;
+  if(dashEnd && pStart && pStart > dashEnd) return false;
+  return true;
+}
+
+function groupByField(list, key){
+  const map = {};
+  list.forEach(p=>{
+    const k = (p[key] && p[key].trim()) || '—';
+    if(!map[k]) map[k] = {count:0, sum:0};
+    map[k].count++;
+    map[k].sum += (p.progress||0);
+  });
+  return Object.entries(map).map(([k,v])=>({label:k, count:v.count, avg:Math.round(v.sum/v.count)})).sort((a,b)=>b.count-a.count);
+}
+function dashPanelHtml(title, rows){
+  if(rows.length===0) return `<div class="dash-panel"><h3>${title}</h3><div style="color:var(--ink-soft);font-size:13px">Nenhum projeto no período.</div></div>`;
+  return `<div class="dash-panel"><h3>${title}</h3>${rows.map(r=>`
+    <div class="dash-row">
+      <span class="label" title="${escapeHtml(r.label)}">${escapeHtml(r.label)}</span>
+      <span class="bar-wrap"><div class="progress-track mini"><div class="progress-fill" style="width:${r.avg}%"></div></div></span>
+      <span class="val">${r.avg}% (${r.count})</span>
+    </div>`).join('')}</div>`;
+}
+
+function renderDashboard(){
+  if(!currentUser) return;
+  const base = getBaseFiltered();
+  const inPeriod = base.filter(projectInPeriod);
+  const lastPhase = phases[phases.length-1];
+  const doneCount = inPeriod.filter(p=>p.phase===lastPhase?.id).length;
+  const completionPct = inPeriod.length ? Math.round((doneCount/inPeriod.length)*100) : 0;
+  const avgProgress = inPeriod.length ? Math.round(inPeriod.reduce((s,p)=>s+(p.progress||0),0)/inPeriod.length) : 0;
+  const lateCount = inPeriod.filter(p=> p.phase!==lastPhase?.id && p.endDate && daysDiff(p.endDate) < 0).length;
+
+  document.getElementById('dash-stats-row').innerHTML = `
+    <div class="stat-card"><div class="val">${inPeriod.length}</div><div class="lbl">Projetos no período</div></div>
+    <div class="stat-card done"><div class="val">${completionPct}%</div><div class="lbl">Concluídos no período (${doneCount}/${inPeriod.length})</div></div>
+    <div class="stat-card progress"><div class="val">${avgProgress}%</div><div class="lbl">Progresso médio</div></div>
+    <div class="stat-card late"><div class="val">${lateCount}</div><div class="lbl">Atrasados</div></div>
+  `;
+
+  const byArea = groupByField(inPeriod, 'area');
+  let html = dashPanelHtml('Progresso médio por área', byArea);
+  if(currentUser.isAdmin){
+    const byManager = groupByField(inPeriod, 'manager');
+    html += dashPanelHtml('Progresso médio por gestor', byManager);
+  }
+  document.getElementById('dash-breakdown').innerHTML = html;
+}
 
 document.getElementById('btn-export').addEventListener('click', ()=>{
   if(projects.length===0){ toast('Nenhum projeto para exportar'); return; }
