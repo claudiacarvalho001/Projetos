@@ -46,11 +46,14 @@
 
   /* HEADER */
   header{
-    display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between;
+    display:flex;flex-direction:column;gap:14px;
     padding:16px 22px;margin-bottom:24px;background:var(--card-bg);
     border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);
     position:sticky;top:12px;z-index:10;backdrop-filter:blur(8px);
   }
+  .header-row{display:flex;flex-wrap:wrap;gap:12px;align-items:center;}
+  .header-row-top{justify-content:space-between;}
+  .header-row-bottom{padding-top:14px;border-top:1px solid var(--paper-line);}
   .title-block h1{
     font-family:var(--font-display);font-weight:700;font-size:22px;margin:0 0 2px;letter-spacing:-0.02em;
   }
@@ -115,6 +118,15 @@
   .checklist-item input[type="text"]:focus{outline:none;}
   .checklist-item .icon-btn{padding:3px 7px;font-size:12px;flex-shrink:0;}
   .checklist-summary{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);margin-top:4px;}
+
+  /* TAGS COLORIDAS */
+  .tag-editor{display:flex;flex-wrap:wrap;gap:6px;min-height:20px;}
+  .tag-custom{
+    display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;color:#fff;
+    padding:3px 9px;border-radius:20px;white-space:nowrap;
+  }
+  .tag-custom .tag-remove{cursor:pointer;opacity:.8;font-size:10px;}
+  .tag-custom .tag-remove:hover{opacity:1;}
 
   /* CARD IMAGE */
   .card-image{width:100%;height:110px;object-fit:cover;border-radius:8px 8px 0 0;display:block;margin:-10px -12px 8px;width:calc(100% + 24px);}
@@ -352,34 +364,49 @@
 <div id="app-root" style="display:none">
 <div class="app">
   <header>
-    <div class="title-block">
-      <h1>Painel de Projetos</h1>
-      <div class="sub" id="header-sub">DADOS COMPARTILHADOS</div>
-    </div>
-    <div class="header-actions">
-      <span class="user-badge" id="user-badge"></span>
-      <button class="btn btn-ghost" id="btn-back-sectors" style="display:none">← Setores</button>
-      <div class="view-toggle" id="workspace-view-toggle" style="display:none">
-        <button id="tab-kanban" class="active">KANBAN</button>
-        <button id="tab-table">TABELA</button>
-        <button id="tab-dashboard">DASHBOARD</button>
-        <button id="tab-calendar">CALENDÁRIO</button>
+    <div class="header-row header-row-top">
+      <div class="title-block">
+        <h1>Painel de Projetos</h1>
+        <div class="sub" id="header-sub">DADOS COMPARTILHADOS</div>
       </div>
-      <span id="workspace-actions" style="display:none">
-        <button class="btn btn-ghost" id="btn-phases">Etapas</button>
-        <button class="btn btn-ghost" id="btn-managers-open">Gestores</button>
-        <button class="btn btn-ghost" id="btn-theme">Cores</button>
-        <button class="btn btn-ghost" id="btn-export">Exportar CSV</button>
-        <button class="btn btn-ghost" id="btn-import">Importar planilha</button>
-        <input type="file" id="import-file-input" accept=".csv,.xlsx,.xls" style="display:none">
-        <button class="btn btn-primary" id="btn-new">+ Novo projeto</button>
-      </span>
-      <button class="btn btn-ghost" id="btn-logout">Sair</button>
+      <div class="header-actions">
+        <span class="user-badge" id="user-badge"></span>
+        <button class="btn btn-ghost" id="btn-back-sectors" style="display:none">← Setores</button>
+        <button class="btn btn-ghost" id="btn-global-calendar">📅 Calendário geral</button>
+        <div class="view-toggle" id="workspace-view-toggle" style="display:none">
+          <button id="tab-kanban" class="active">KANBAN</button>
+          <button id="tab-table">TABELA</button>
+          <button id="tab-dashboard">DASHBOARD</button>
+          <button id="tab-calendar">CALENDÁRIO</button>
+        </div>
+        <button class="btn btn-ghost" id="btn-logout">Sair</button>
+      </div>
+    </div>
+    <div class="header-row header-row-bottom" id="workspace-actions" style="display:none">
+      <button class="btn btn-ghost" id="btn-phases">Etapas</button>
+      <button class="btn btn-ghost" id="btn-managers-open">Gestores</button>
+      <button class="btn btn-ghost" id="btn-theme">Cores</button>
+      <button class="btn btn-ghost" id="btn-export">Exportar CSV</button>
+      <button class="btn btn-ghost" id="btn-import">Importar planilha</button>
+      <input type="file" id="import-file-input" accept=".csv,.xlsx,.xls" style="display:none">
+      <button class="btn btn-primary" id="btn-new">+ Novo projeto</button>
     </div>
   </header>
 
   <div id="view-sectors">
     <div class="sector-grid" id="sector-grid"></div>
+  </div>
+
+  <div id="view-global-calendar" style="display:none">
+    <div class="calendar-header">
+      <div class="calendar-nav">
+        <button class="btn btn-ghost" id="btn-calg-prev">‹</button>
+        <button class="btn btn-ghost" id="btn-calg-today">Hoje</button>
+        <button class="btn btn-ghost" id="btn-calg-next">›</button>
+      </div>
+      <div class="calendar-label" id="calg-label"></div>
+    </div>
+    <div class="calendar-grid" id="calendar-grid-global"></div>
   </div>
 
   <div id="project-workspace" style="display:none">
@@ -406,6 +433,7 @@
           <thead>
             <tr>
               <th data-k="name">Projeto</th>
+              <th>Tags</th>
               <th data-k="area">Área</th>
               <th data-k="manager">Gestor</th>
               <th data-k="phase">Etapa</th>
@@ -494,6 +522,15 @@
       </div>
     </div>
     <div class="field">
+      <label>Tags coloridas (opcional)</label>
+      <div class="tag-editor" id="p-tags-list"></div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <input type="text" id="new-tag-text" placeholder="Nome da tag" style="flex:1">
+        <input type="color" id="new-tag-color" value="#5B5BF6">
+        <button type="button" class="icon-btn" id="btn-add-tag">+</button>
+      </div>
+    </div>
+    <div class="field">
       <label>Checklist de etapas (opcional)</label>
       <div class="checklist" id="p-checklist"></div>
       <button type="button" class="add-in-col" id="btn-add-checklist-item" style="margin-top:8px">+ Adicionar item</button>
@@ -550,6 +587,30 @@
     <div class="modal-actions">
       <div></div>
       <div class="left"><button class="btn btn-primary" id="btn-managers-done">Concluir</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal setor -->
+<div class="overlay" id="modal-sector" style="display:none">
+  <div class="modal">
+    <h2 id="sector-modal-title">Novo setor</h2>
+    <input type="hidden" id="sector-id">
+    <div class="field"><label>Nome do setor</label><input id="sector-name" placeholder="Ex: Limpeza Urbana"></div>
+    <div class="field">
+      <label>Ícone (opcional — imagem própria)</label>
+      <div class="img-upload-row">
+        <div class="img-preview empty" id="sector-img-preview">sem ícone</div>
+        <input type="file" id="sector-image-input" accept="image/*">
+        <button type="button" class="icon-btn" id="btn-remove-sector-image" title="Remover" style="display:none">✕</button>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <div class="left"><button class="btn danger" id="btn-delete-sector" style="display:none">Excluir setor</button></div>
+      <div class="left">
+        <button class="btn btn-ghost" id="btn-sector-cancel">Cancelar</button>
+        <button class="btn btn-primary" id="btn-sector-save">Salvar</button>
+      </div>
     </div>
   </div>
 </div>
@@ -826,6 +887,7 @@ function subscribeData(){
     projects = snap.docs.map(d=>({id:d.id, ...d.data()}));
     renderSectorGrid();
     renderAll();
+    if(document.getElementById('view-global-calendar').style.display==='block') renderGlobalCalendar();
   }, err=>{
     console.error(err);
     toast('Erro ao carregar projetos (verifique as regras do Firestore)');
@@ -855,13 +917,15 @@ function renderSectorGrid(){
   const noneCount = projectsForSector('__none__').length;
   let html = sectors.map(s=>{
     const count = projectsForSector(s.id).length;
+    const iconHtml = s.icon
+      ? `<img src="${s.icon}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:10px">`
+      : sectorIcon(s.id);
     return `
     <div class="sector-card" data-id="${s.id}">
       ${currentUser.isAdmin ? `<div class="sector-menu">
-        <button data-rename="${s.id}" title="Renomear">✎</button>
-        <button data-delete="${s.id}" title="Excluir">✕</button>
+        <button data-edit="${s.id}" title="Editar">✎</button>
       </div>` : ''}
-      <div class="sector-icon">${sectorIcon(s.id)}</div>
+      <div class="sector-icon">${iconHtml}</div>
       <div class="sector-name">${escapeHtml(s.name)}</div>
       <div class="sector-count">${count} projeto(s)</div>
     </div>`;
@@ -893,50 +957,92 @@ function renderSectorGrid(){
       if(s) enterSector(s);
     });
   });
-  grid.querySelectorAll('[data-rename]').forEach(btn=>{
-    btn.addEventListener('click', async e=>{
+  grid.querySelectorAll('[data-edit]').forEach(btn=>{
+    btn.addEventListener('click', e=>{
       e.stopPropagation();
-      const s = sectors.find(x=>x.id===btn.dataset.rename);
-      if(!s) return;
-      const name = prompt('Novo nome do setor:', s.name);
-      if(name && name.trim()){
-        s.name = name.trim();
-        await saveSectors();
-        toast('Setor renomeado');
-      }
-    });
-  });
-  grid.querySelectorAll('[data-delete]').forEach(btn=>{
-    btn.addEventListener('click', async e=>{
-      e.stopPropagation();
-      const s = sectors.find(x=>x.id===btn.dataset.delete);
-      if(!s) return;
-      if(!confirm(`Excluir o setor "${s.name}"? Os projetos dele não serão apagados, mas ficarão em "Sem setor" até você reatribuí-los.`)) return;
-      sectors = sectors.filter(x=>x.id!==s.id);
-      await saveSectors();
-      toast('Setor excluído');
+      const s = sectors.find(x=>x.id===btn.dataset.edit);
+      if(s) openSectorModal(s);
     });
   });
   const addBtn = document.getElementById('btn-add-sector');
   if(addBtn){
-    addBtn.addEventListener('click', async ()=>{
-      const name = prompt('Nome do novo setor (ex: Limpeza Urbana):');
-      if(name && name.trim()){
-        sectors.push({id:'sec_'+Date.now().toString(36), name: name.trim()});
-        await saveSectors();
-        toast('Setor criado');
-      }
-    });
+    addBtn.addEventListener('click', ()=>openSectorModal(null));
   }
 }
+
+// ---- Modal setor (nome + ícone/imagem) ----
+let currentSectorImage = '';
+const modalSector = document.getElementById('modal-sector');
+function renderSectorImagePreview(){
+  const prev = document.getElementById('sector-img-preview');
+  const removeBtn = document.getElementById('btn-remove-sector-image');
+  if(currentSectorImage){
+    prev.classList.remove('empty');
+    prev.innerHTML = `<img src="${currentSectorImage}" style="width:100%;height:100%;object-fit:cover;border-radius:8px">`;
+    removeBtn.style.display = 'inline-block';
+  }else{
+    prev.classList.add('empty');
+    prev.textContent = 'sem ícone';
+    removeBtn.style.display = 'none';
+  }
+}
+function openSectorModal(sector){
+  document.getElementById('sector-modal-title').textContent = sector ? 'Editar setor' : 'Novo setor';
+  document.getElementById('sector-id').value = sector ? sector.id : '';
+  document.getElementById('sector-name').value = sector ? sector.name : '';
+  currentSectorImage = (sector && sector.icon) ? sector.icon : '';
+  renderSectorImagePreview();
+  document.getElementById('btn-delete-sector').style.display = sector ? 'inline-block' : 'none';
+  modalSector.style.display = 'flex';
+}
+document.getElementById('sector-image-input').addEventListener('change', async e=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  try{
+    currentSectorImage = await resizeImageFile(file);
+    renderSectorImagePreview();
+  }catch(err){ toast('Não foi possível processar a imagem'); }
+  e.target.value = '';
+});
+document.getElementById('btn-remove-sector-image').addEventListener('click', ()=>{
+  currentSectorImage = '';
+  renderSectorImagePreview();
+});
+document.getElementById('btn-sector-cancel').addEventListener('click', ()=>{ modalSector.style.display='none'; });
+modalSector.addEventListener('click', e=>{ if(e.target===modalSector) modalSector.style.display='none'; });
+document.getElementById('btn-sector-save').addEventListener('click', async ()=>{
+  const name = document.getElementById('sector-name').value.trim();
+  if(!name){ toast('Dê um nome ao setor'); return; }
+  const id = document.getElementById('sector-id').value;
+  if(id){
+    const s = sectors.find(x=>x.id===id);
+    if(s){ s.name = name; s.icon = currentSectorImage; }
+  }else{
+    sectors.push({id:'sec_'+Date.now().toString(36), name, icon: currentSectorImage});
+  }
+  await saveSectors();
+  modalSector.style.display = 'none';
+  toast('Setor salvo');
+});
+document.getElementById('btn-delete-sector').addEventListener('click', async ()=>{
+  const id = document.getElementById('sector-id').value;
+  const s = sectors.find(x=>x.id===id);
+  if(!s) return;
+  if(!confirm(`Excluir o setor "${s.name}"? Os projetos dele não serão apagados, mas ficarão em "Sem setor" até você reatribuí-los.`)) return;
+  sectors = sectors.filter(x=>x.id!==id);
+  await saveSectors();
+  modalSector.style.display = 'none';
+  toast('Setor excluído');
+});
 
 function enterSector(s){
   currentSector = s;
   document.getElementById('view-sectors').style.display = 'none';
+  document.getElementById('view-global-calendar').style.display = 'none';
   document.getElementById('project-workspace').style.display = 'block';
   document.getElementById('btn-back-sectors').style.display = 'inline-block';
   document.getElementById('workspace-view-toggle').style.display = 'flex';
-  document.getElementById('workspace-actions').style.display = 'inline-flex';
+  document.getElementById('workspace-actions').style.display = 'flex';
   document.getElementById('btn-new').style.display = (s.id === '__none__') ? 'none' : 'inline-block';
   document.getElementById('header-sub').textContent =
     (currentUser.isAdmin ? 'Administrador' : 'Gestor') + ' — setor: ' + s.name;
@@ -944,6 +1050,7 @@ function enterSector(s){
 }
 function backToSectorsUI(){
   document.getElementById('view-sectors').style.display = 'block';
+  document.getElementById('view-global-calendar').style.display = 'none';
   document.getElementById('project-workspace').style.display = 'none';
   document.getElementById('btn-back-sectors').style.display = 'none';
   document.getElementById('workspace-view-toggle').style.display = 'none';
@@ -957,6 +1064,80 @@ function backToSectorsUI(){
 document.getElementById('btn-back-sectors').addEventListener('click', ()=>{
   currentSector = null;
   backToSectorsUI();
+});
+
+// ---- Calendário geral (todos os setores) ----
+let calDateGlobal = new Date();
+calDateGlobal.setDate(1);
+function showGlobalCalendar(){
+  currentSector = null;
+  document.getElementById('view-sectors').style.display = 'none';
+  document.getElementById('project-workspace').style.display = 'none';
+  document.getElementById('view-global-calendar').style.display = 'block';
+  document.getElementById('btn-back-sectors').style.display = 'inline-block';
+  document.getElementById('workspace-view-toggle').style.display = 'none';
+  document.getElementById('workspace-actions').style.display = 'none';
+  document.getElementById('header-sub').textContent = 'Calendário geral — todos os setores';
+  renderGlobalCalendar();
+}
+document.getElementById('btn-global-calendar').addEventListener('click', showGlobalCalendar);
+
+function renderGlobalCalendar(){
+  if(!currentUser) return;
+  const year = calDateGlobal.getFullYear(), month = calDateGlobal.getMonth();
+  const first = new Date(year, month, 1);
+  const startWeekday = first.getDay();
+  const gridStart = new Date(year, month, 1 - startWeekday);
+  const todayIso = new Date().toISOString().slice(0,10);
+
+  document.getElementById('calg-label').textContent =
+    first.toLocaleDateString('pt-BR', {month:'long', year:'numeric'});
+
+  let html = WEEKDAY_LABELS.map(w=>`<div class="cal-weekday">${w}</div>`).join('');
+  for(let i=0;i<42;i++){
+    const d = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate()+i);
+    const iso = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    const inMonth = d.getMonth()===month;
+    const isToday = iso===todayIso;
+    const dayProjects = projects.filter(p=>{
+      if(!p.startDate && !p.endDate) return false;
+      const s = p.startDate || p.endDate;
+      const e = p.endDate || p.startDate;
+      return iso>=s && iso<=e;
+    });
+    html += `<div class="calendar-day ${inMonth?'':'other-month'} ${isToday?'today':''}">
+      <div class="cal-daynum">${d.getDate()}</div>
+      ${dayProjects.slice(0,3).map(p=>{
+        const secName = sectors.find(s=>s.id===p.sector)?.name || 'Sem setor';
+        return `<div class="cal-chip" style="--prio-color:${PRIO_COLOR[p.priority]||'var(--border)'}" data-id="${p.id}" title="${escapeHtml(p.name)} — ${escapeHtml(secName)}">${escapeHtml(p.name)}</div>`;
+      }).join('')}
+      ${dayProjects.length>3?`<div class="cal-more">+${dayProjects.length-3} mais</div>`:''}
+    </div>`;
+  }
+  const grid = document.getElementById('calendar-grid-global');
+  grid.innerHTML = html;
+  grid.querySelectorAll('.cal-chip').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      const p = projects.find(x=>x.id===chip.dataset.id);
+      if(!p) return;
+      const s = sectors.find(x=>x.id===p.sector) || {id:'__none__', name:'Sem setor'};
+      enterSector(s);
+      setTimeout(()=>openEdit(p.id), 0);
+    });
+  });
+}
+document.getElementById('btn-calg-prev').addEventListener('click', ()=>{
+  calDateGlobal.setMonth(calDateGlobal.getMonth()-1);
+  renderGlobalCalendar();
+});
+document.getElementById('btn-calg-next').addEventListener('click', ()=>{
+  calDateGlobal.setMonth(calDateGlobal.getMonth()+1);
+  renderGlobalCalendar();
+});
+document.getElementById('btn-calg-today').addEventListener('click', ()=>{
+  calDateGlobal = new Date();
+  calDateGlobal.setDate(1);
+  renderGlobalCalendar();
 });
 
 async function savePhases(){
@@ -1193,6 +1374,7 @@ function cardHtml(p){
     ${p.image?`<img class="card-image" src="${p.image}" alt="">`:''}
     <div class="id"><span class="prio-dot"></span>#${p.id.slice(-5).toUpperCase()}</div>
     <div class="pname">${escapeHtml(p.name)}</div>
+    ${Array.isArray(p.tags) && p.tags.length>0 ? `<div class="meta">${p.tags.map(t=>`<span class="tag-custom" style="background:${t.color}">${escapeHtml(t.text)}</span>`).join('')}</div>` : ''}
     <div class="meta">
       ${p.area?`<span class="tag">${escapeHtml(p.area)}</span>`:''}
       <span class="tag">${escapeHtml(p.priority)}</span>
@@ -1225,7 +1407,7 @@ function renderTable(){
     });
   }
   if(filtered.length===0){
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--ink-soft)">Nenhum projeto encontrado.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--ink-soft)">Nenhum projeto encontrado.</td></tr>`;
     return;
   }
   tbody.innerHTML = filtered.map(p=>{
@@ -1234,6 +1416,7 @@ function renderTable(){
     const stColor = st.cls==='late' ? 'var(--brick)' : st.cls==='done' ? 'var(--sage)' : 'var(--teal)';
     return `<tr data-id="${p.id}" style="cursor:pointer">
       <td><strong>${escapeHtml(p.name)}</strong></td>
+      <td>${(Array.isArray(p.tags)&&p.tags.length>0) ? p.tags.map(t=>`<span class="tag-custom" style="background:${t.color}">${escapeHtml(t.text)}</span>`).join(' ') : '—'}</td>
       <td>${escapeHtml(p.area||'—')}</td>
       <td>${escapeHtml(p.manager||'—')}</td>
       <td><span class="pill" style="border-color:var(--border)">${escapeHtml(phaseName)}</span></td>
@@ -1258,6 +1441,28 @@ function renderTable(){
 const modalProject = document.getElementById('modal-project');
 let currentChecklist = [];
 let currentImage = '';
+let currentTags = [];
+
+function renderTagEditor(){
+  const wrap = document.getElementById('p-tags-list');
+  wrap.innerHTML = currentTags.map((t,i)=>`
+    <span class="tag-custom" style="background:${t.color}">${escapeHtml(t.text)} <span class="tag-remove" data-i="${i}">✕</span></span>
+  `).join('') || '<span style="font-size:12px;color:var(--ink-soft)">Nenhuma tag ainda</span>';
+  wrap.querySelectorAll('.tag-remove').forEach(x=>{
+    x.addEventListener('click', ()=>{ currentTags.splice(+x.dataset.i,1); renderTagEditor(); });
+  });
+}
+document.getElementById('btn-add-tag').addEventListener('click', ()=>{
+  const text = document.getElementById('new-tag-text').value.trim();
+  const color = document.getElementById('new-tag-color').value;
+  if(!text){ toast('Digite um nome para a tag'); return; }
+  currentTags.push({text, color});
+  document.getElementById('new-tag-text').value = '';
+  renderTagEditor();
+});
+document.getElementById('new-tag-text').addEventListener('keydown', e=>{
+  if(e.key==='Enter'){ e.preventDefault(); document.getElementById('btn-add-tag').click(); }
+});
 
 function renderChecklistEditor(){
   const wrap = document.getElementById('p-checklist');
@@ -1385,6 +1590,8 @@ function openNew(phaseId){
   document.getElementById('p-progress').disabled = false;
   currentChecklist = [];
   renderChecklistEditor();
+  currentTags = [];
+  renderTagEditor();
   currentImage = '';
   renderImagePreview();
   document.getElementById('field-sector-picker').style.display = currentUser.isAdmin ? 'block' : 'none';
@@ -1419,6 +1626,8 @@ function openEdit(id){
   renderSectorPicker(p.sector||null);
   currentChecklist = Array.isArray(p.checklist) ? p.checklist.map(i=>({...i})) : [];
   renderChecklistEditor();
+  currentTags = Array.isArray(p.tags) ? p.tags.map(t=>({...t})) : [];
+  renderTagEditor();
   currentImage = p.image || '';
   renderImagePreview();
   document.getElementById('btn-delete').style.display = (currentUser.isAdmin || p.managerEmail===currentUser.email) ? 'inline-block' : 'none';
@@ -1453,6 +1662,7 @@ document.getElementById('btn-save').addEventListener('click', async ()=>{
     priority: document.getElementById('p-priority').value,
     progress: +document.getElementById('p-progress').value,
     checklist: currentChecklist.filter(i=>i.text.trim()),
+    tags: currentTags,
     image: currentImage,
     notes: document.getElementById('p-notes').value.trim()
   };
