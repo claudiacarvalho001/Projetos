@@ -285,6 +285,12 @@
   .bell-item .actions .btn{padding:6px 10px;font-size:11.5px;flex:1;text-align:center;justify-content:center;}
   .bell-empty{font-size:12.5px;color:var(--ink-soft);text-align:center;padding:8px 0;}
 
+  /* HISTÓRICO DE ACESSOS */
+  .history-item{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1px solid var(--border);border-radius:9px;}
+  .history-item .who{font-size:13px;font-weight:600;}
+  .history-item .who .role-tag{font-family:var(--font-mono);font-size:9.5px;font-weight:500;color:var(--ink-soft);margin-left:6px;}
+  .history-item .when{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);white-space:nowrap;}
+
   .color-list{display:flex;flex-direction:column;gap:10px;margin-bottom:16px;}
   .color-row{display:flex;align-items:center;gap:12px;}
   .color-row .swatch-label{flex:1;font-size:13px;}
@@ -331,6 +337,7 @@
   .legend-item .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
 
   /* SETORES */
+  .sector-section-title{font-family:var(--font-display);font-weight:600;font-size:15px;margin:28px 0 4px;color:var(--ink);}
   .sector-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;margin-top:8px;}
   .sector-card{
     background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);
@@ -408,6 +415,7 @@
             <div id="bell-list"></div>
           </div>
         </div>
+        <button class="btn btn-ghost" id="btn-history" style="display:none">🕒 Histórico</button>
         <button class="btn btn-ghost" id="btn-back-sectors" style="display:none">← Setores</button>
         <button class="btn btn-ghost" id="btn-global-calendar">📅 Calendário geral</button>
         <div class="view-toggle" id="workspace-view-toggle" style="display:none">
@@ -431,6 +439,17 @@
   </header>
 
   <div id="view-sectors">
+    <div class="dash-period-bar">
+      <div class="dash-presets">
+        <button class="btn btn-ghost" id="gdash-preset-week">Esta semana</button>
+        <button class="btn btn-ghost" id="gdash-preset-month">Este mês</button>
+        <button class="btn btn-ghost active" id="gdash-preset-all">Todos os projetos</button>
+      </div>
+    </div>
+    <div class="stats-row" id="gdash-stats-row"></div>
+    <div class="dash-breakdown" id="gdash-breakdown"></div>
+
+    <div class="sector-section-title">Setores</div>
     <div class="sector-grid" id="sector-grid"></div>
   </div>
 
@@ -611,6 +630,18 @@
     <div class="modal-actions">
       <div></div>
       <div class="left"><button class="btn btn-primary" id="btn-phases-done">Concluir</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal histórico de acessos -->
+<div class="overlay" id="modal-history" style="display:none">
+  <div class="modal">
+    <h2>Histórico de acessos</h2>
+    <div id="history-list" style="max-height:50vh;overflow-y:auto;display:flex;flex-direction:column;gap:8px;"></div>
+    <div class="modal-actions">
+      <div class="left"><button class="btn danger" id="btn-clear-history">Limpar histórico</button></div>
+      <div class="left"><button class="btn btn-primary" id="btn-history-close">Fechar</button></div>
     </div>
   </div>
 </div>
@@ -797,8 +828,17 @@ auth.onAuthStateChanged(async user=>{
     document.getElementById('btn-managers-open').style.display = isAdmin ? 'inline-block' : 'none';
     document.getElementById('btn-import').style.display = isAdmin ? 'inline-block' : 'none';
     document.getElementById('bell-wrap').style.display = isAdmin ? 'inline-block' : 'none';
+    document.getElementById('btn-history').style.display = isAdmin ? 'inline-block' : 'none';
     document.getElementById('field-manager-text').style.display = isAdmin ? 'none' : 'block';
     document.getElementById('field-manager-picker').style.display = isAdmin ? 'block' : 'none';
+    try{
+      await db.collection('accessLogs').add({
+        email: user.email,
+        name: user.displayName || '',
+        role: isAdmin ? 'admin' : 'gestor',
+        timestamp: Date.now()
+      });
+    }catch(e){ console.error(e); }
     currentSector = null;
     backToSectorsUI();
     subscribeData();
@@ -813,6 +853,7 @@ auth.onAuthStateChanged(async user=>{
     currentSector = null;
     document.getElementById('bell-panel').style.display = 'none';
     document.getElementById('bell-wrap').style.display = 'none';
+    document.getElementById('btn-history').style.display = 'none';
     document.getElementById('login-screen').style.display = 'flex';
     document.getElementById('app-root').style.display = 'none';
     document.getElementById('login-email').value = '';
@@ -960,6 +1001,7 @@ function subscribeData(){
   unsubscribeSectors = db.collection('config').doc('sectors').onSnapshot(doc=>{
     sectors = doc.exists && doc.data().list ? doc.data().list : [];
     renderSectorGrid();
+    renderGlobalDashboard();
   }, err=>console.error(err));
 
   if(unsubscribeAccessRequests) unsubscribeAccessRequests();
@@ -978,6 +1020,7 @@ function subscribeData(){
   unsubscribeProjects = query.onSnapshot(snap=>{
     projects = snap.docs.map(d=>({id:d.id, ...d.data()}));
     renderSectorGrid();
+    renderGlobalDashboard();
     renderAll();
     if(document.getElementById('view-global-calendar').style.display==='block') renderGlobalCalendar();
   }, err=>{
@@ -1003,6 +1046,90 @@ function projectsForSector(sectorId){
   }
   return projects.filter(p => p.sector === sectorId);
 }
+// ---- Dashboard geral (tela de Setores) ----
+let gdashStart = '', gdashEnd = '';
+function setGdashPreset(p){
+  const today = new Date();
+  if(p==='week'){ gdashStart = isoDate(startOfWeek(today)); gdashEnd = isoDate(endOfWeek(today)); }
+  else if(p==='month'){ gdashStart = isoDate(startOfMonth(today)); gdashEnd = isoDate(endOfMonth(today)); }
+  else{ gdashStart=''; gdashEnd=''; }
+  document.querySelectorAll('#view-sectors .dash-presets button').forEach(b=>b.classList.remove('active'));
+  document.getElementById('gdash-preset-'+p).classList.add('active');
+  renderGlobalDashboard();
+}
+document.getElementById('gdash-preset-week').addEventListener('click', ()=>setGdashPreset('week'));
+document.getElementById('gdash-preset-month').addEventListener('click', ()=>setGdashPreset('month'));
+document.getElementById('gdash-preset-all').addEventListener('click', ()=>setGdashPreset('all'));
+
+function projectInGdashPeriod(p){
+  if(!gdashStart && !gdashEnd) return true;
+  const pStart = p.startDate || p.endDate;
+  const pEnd = p.endDate || p.startDate;
+  if(!pStart && !pEnd) return false;
+  if(gdashStart && pEnd && pEnd < gdashStart) return false;
+  if(gdashEnd && pStart && pStart > gdashEnd) return false;
+  return true;
+}
+
+function renderGlobalDashboard(){
+  if(!currentUser) return;
+  const statsRow = document.getElementById('gdash-stats-row');
+  if(!statsRow) return;
+  const inPeriod = projects.filter(projectInGdashPeriod);
+  const lastPhase = phases[phases.length-1];
+  const doneCount = inPeriod.filter(p=>p.phase===lastPhase?.id).length;
+  const completionPct = inPeriod.length ? Math.round((doneCount/inPeriod.length)*100) : 0;
+  const avgProgress = inPeriod.length ? Math.round(inPeriod.reduce((s,p)=>s+(p.progress||0),0)/inPeriod.length) : 0;
+  const lateCount = inPeriod.filter(p=> p.phase!==lastPhase?.id && p.endDate && daysDiff(p.endDate) < 0).length;
+  const onTimeCount = Math.max(0, inPeriod.length - doneCount - lateCount);
+
+  statsRow.innerHTML = `
+    <div class="stat-card"><div class="val">${inPeriod.length}</div><div class="lbl">Total de projetos</div></div>
+    ${ringCardHtml(completionPct, 'var(--sage)', `Concluídos (${doneCount}/${inPeriod.length})`, 'done')}
+    ${ringCardHtml(avgProgress, 'var(--primary)', 'Progresso médio', 'progress')}
+    <div class="stat-card late"><div class="val">${lateCount}</div><div class="lbl">Atrasados</div></div>
+  `;
+
+  let html = '';
+  if(inPeriod.length > 0){
+    const doneP = (doneCount/inPeriod.length)*100;
+    const lateP = (lateCount/inPeriod.length)*100;
+    const gradient = `conic-gradient(var(--sage) 0% ${doneP}%, var(--brick) ${doneP}% ${doneP+lateP}%, var(--teal) ${doneP+lateP}% 100%)`;
+    html += `<div class="dash-panel">
+      <h3>Distribuição de status</h3>
+      <div class="donut-row">
+        <div class="donut" style="background:${gradient}"><div class="donut-hole">${inPeriod.length}</div></div>
+        <div class="donut-legend">
+          <div class="legend-item"><span class="dot" style="background:var(--sage)"></span>Concluído <b>${doneCount}</b></div>
+          <div class="legend-item"><span class="dot" style="background:var(--brick)"></span>Atrasado <b>${lateCount}</b></div>
+          <div class="legend-item"><span class="dot" style="background:var(--teal)"></span>No prazo <b>${onTimeCount}</b></div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  const sectorGroups = {};
+  inPeriod.forEach(p=>{
+    const secName = sectors.find(s=>s.id===p.sector)?.name || 'Sem setor';
+    if(!sectorGroups[secName]) sectorGroups[secName] = {count:0, sum:0};
+    sectorGroups[secName].count++;
+    sectorGroups[secName].sum += (p.progress||0);
+  });
+  const bySector = Object.entries(sectorGroups)
+    .map(([k,v])=>({label:k, count:v.count, avg:Math.round(v.sum/v.count)}))
+    .sort((a,b)=>b.count-a.count);
+  html += dashPanelHtml('Progresso médio por setor', bySector);
+
+  const byArea = groupByField(inPeriod, 'area');
+  html += dashPanelHtml('Progresso médio por área', byArea);
+
+  if(currentUser.isAdmin){
+    const byManager = groupByField(inPeriod, 'manager');
+    html += dashPanelHtml('Progresso médio por gestor', byManager);
+  }
+  document.getElementById('gdash-breakdown').innerHTML = html;
+}
+
 function renderSectorGrid(){
   const grid = document.getElementById('sector-grid');
   if(!grid) return;
@@ -1152,6 +1279,7 @@ function backToSectorsUI(){
     ? 'DADOS COMPARTILHADOS — visão de administrador (todos os projetos)'
     : 'Seus projetos como gestor';
   renderSectorGrid();
+    renderGlobalDashboard();
 }
 document.getElementById('btn-back-sectors').addEventListener('click', ()=>{
   currentSector = null;
@@ -1824,6 +1952,50 @@ document.getElementById('btn-managers-done').addEventListener('click', async ()=
   toast('Gestores atualizados');
 });
 modalManagers.addEventListener('click', e=>{ if(e.target===modalManagers) modalManagers.style.display='none'; });
+
+// ---- Histórico de acessos ----
+const modalHistory = document.getElementById('modal-history');
+document.getElementById('btn-history').addEventListener('click', async ()=>{
+  modalHistory.style.display = 'flex';
+  const list = document.getElementById('history-list');
+  list.innerHTML = '<div class="bell-empty">Carregando...</div>';
+  try{
+    const snap = await db.collection('accessLogs').orderBy('timestamp','desc').limit(200).get();
+    if(snap.empty){
+      list.innerHTML = '<div class="bell-empty">Nenhum acesso registrado ainda.</div>';
+      return;
+    }
+    list.innerHTML = snap.docs.map(d=>{
+      const r = d.data();
+      const when = r.timestamp ? new Date(r.timestamp).toLocaleString('pt-BR') : '—';
+      const roleLabel = r.role === 'admin' ? 'ADMIN' : 'GESTOR';
+      return `<div class="history-item">
+        <div class="who">${escapeHtml(r.name || r.email)}<span class="role-tag">${roleLabel}</span><br>
+          <span style="font-weight:400;color:var(--ink-soft);font-size:11.5px">${escapeHtml(r.email)}</span>
+        </div>
+        <div class="when">${when}</div>
+      </div>`;
+    }).join('');
+  }catch(e){
+    console.error(e);
+    list.innerHTML = '<div class="bell-empty">Erro ao carregar histórico.</div>';
+  }
+});
+document.getElementById('btn-history-close').addEventListener('click', ()=>{ modalHistory.style.display='none'; });
+modalHistory.addEventListener('click', e=>{ if(e.target===modalHistory) modalHistory.style.display='none'; });
+document.getElementById('btn-clear-history').addEventListener('click', async ()=>{
+  if(!confirm('Apagar todo o histórico de acessos? Essa ação não pode ser desfeita.')) return;
+  try{
+    const snap = await db.collection('accessLogs').get();
+    const batchDeletes = snap.docs.map(d => db.collection('accessLogs').doc(d.id).delete());
+    await Promise.all(batchDeletes);
+    document.getElementById('history-list').innerHTML = '<div class="bell-empty">Nenhum acesso registrado ainda.</div>';
+    toast('Histórico apagado');
+  }catch(e){
+    console.error(e);
+    toast('Erro ao apagar histórico (verifique permissões)');
+  }
+});
 
 // ---- Sino de solicitações de acesso ----
 function renderBell(){
