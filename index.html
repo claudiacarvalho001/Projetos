@@ -262,6 +262,8 @@
   .login-card h1{font-family:var(--font-display);font-size:22px;margin:0 0 4px;}
   .login-card .sub{font-family:var(--font-mono);font-size:11.5px;color:var(--ink-soft);margin-bottom:24px;}
   .login-error{font-size:12.5px;color:var(--brick);margin-top:8px;min-height:16px;}
+  .login-divider{display:flex;align-items:center;gap:10px;margin:16px 0;font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);}
+  .login-divider::before, .login-divider::after{content:'';flex:1;height:1px;background:var(--border);}
   .login-card .btn{width:100%;margin-top:8px;text-align:center;padding:11px;}
   .user-badge{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);display:flex;align-items:center;gap:8px;}
   .user-badge .role{padding:3px 9px;border-radius:20px;background:var(--paper);border:1px solid var(--border);}
@@ -364,6 +366,11 @@
       <button type="submit" class="btn btn-primary">Entrar</button>
       <div class="login-error" id="login-error"></div>
     </form>
+    <div class="login-divider"><span>ou</span></div>
+    <button type="button" class="btn btn-ghost" id="btn-google-login" style="width:100%;justify-content:center;display:flex;align-items:center;gap:8px">
+      <svg width="16" height="16" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.6-6 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 3l6-6C34.5 5.1 29.6 3 24 3 12.4 3 3 12.4 3 24s9.4 21 21 21 21-9.4 21-21c0-1.2-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.5 15.9 18.9 13 24 13c3.1 0 5.8 1.1 8 3l6-6C34.5 5.1 29.6 3 24 3 16 3 9 7.6 6.3 14.7z"/><path fill="#4CAF50" d="M24 45c5.5 0 10.4-2.1 14.2-5.5l-6.6-5.6C29.6 35.8 27 37 24 37c-5.2 0-9.6-3.4-11.2-8l-6.6 5.1C9 40.5 16 45 24 45z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.2-4.2 5.6l6.6 5.6C41.4 36 45 30.5 45 24c0-1.2-.1-2.4-.4-3.5z"/></svg>
+      Entrar com Google
+    </button>
   </div>
 </div>
 
@@ -703,6 +710,29 @@ document.getElementById('login-form').addEventListener('submit', async e=>{
 });
 document.getElementById('btn-logout').addEventListener('click', ()=>auth.signOut());
 
+document.getElementById('btn-google-login').addEventListener('click', async ()=>{
+  const errEl = document.getElementById('login-error');
+  errEl.textContent = '';
+  const provider = new firebase.auth.GoogleAuthProvider();
+  try{
+    await auth.signInWithPopup(provider);
+  }catch(err){
+    if(err.code === 'auth/account-exists-with-different-credential'){
+      errEl.textContent = 'Esse e-mail já tem login por senha — entre com e-mail e senha em vez do Google.';
+    }else if(err.code !== 'auth/popup-closed-by-user'){
+      errEl.textContent = 'Não foi possível entrar com o Google.';
+    }
+  }
+});
+
+async function isAuthorizedNonAdmin(email){
+  try{
+    const mgrDoc = await db.collection('config').doc('managers').get();
+    const list = mgrDoc.exists && mgrDoc.data().list ? mgrDoc.data().list : [];
+    return list.some(m => (m.email||'').toLowerCase() === email.toLowerCase());
+  }catch(e){ return false; }
+}
+
 auth.onAuthStateChanged(async user=>{
   if(user){
     let isAdmin = false;
@@ -710,6 +740,17 @@ auth.onAuthStateChanged(async user=>{
       const adminDoc = await db.collection('admins').doc(user.email).get();
       isAdmin = adminDoc.exists;
     }catch(e){ isAdmin = false; }
+
+    if(!isAdmin){
+      const authorized = await isAuthorizedNonAdmin(user.email);
+      if(!authorized){
+        document.getElementById('login-error').textContent =
+          'Este e-mail (' + user.email + ') ainda não está autorizado. Peça para o administrador te adicionar em "Gestores".';
+        await auth.signOut();
+        return;
+      }
+    }
+
     currentUser = {email:user.email, isAdmin};
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('app-root').style.display = 'block';
