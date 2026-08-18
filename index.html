@@ -338,6 +338,7 @@
 
   /* SETORES */
   .sector-section-title{font-family:var(--font-display);font-weight:600;font-size:15px;margin:28px 0 4px;color:var(--ink);}
+  .gdash-toggle-row{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;}
   .sector-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;margin-top:8px;}
   .sector-card{
     background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);
@@ -432,6 +433,7 @@
       <button class="btn btn-ghost" id="btn-managers-open">Gestores</button>
       <button class="btn btn-ghost" id="btn-theme">Cores</button>
       <button class="btn btn-ghost" id="btn-export">Exportar CSV</button>
+      <button class="btn btn-ghost" id="btn-sector-report">📄 Relatório do setor (PDF)</button>
       <button class="btn btn-ghost" id="btn-import">Importar planilha</button>
       <input type="file" id="import-file-input" accept=".csv,.xlsx,.xls" style="display:none">
       <button class="btn btn-primary" id="btn-new">+ Novo projeto</button>
@@ -439,15 +441,21 @@
   </header>
 
   <div id="view-sectors">
-    <div class="dash-period-bar">
-      <div class="dash-presets">
-        <button class="btn btn-ghost" id="gdash-preset-week">Esta semana</button>
-        <button class="btn btn-ghost" id="gdash-preset-month">Este mês</button>
-        <button class="btn btn-ghost active" id="gdash-preset-all">Todos os projetos</button>
-      </div>
+    <div class="gdash-toggle-row">
+      <button class="btn btn-ghost" id="btn-toggle-gdash">📊 Dashboard geral</button>
+      <button class="btn btn-ghost" id="btn-global-report">📄 Relatório geral (PDF)</button>
     </div>
-    <div class="stats-row" id="gdash-stats-row"></div>
-    <div class="dash-breakdown" id="gdash-breakdown"></div>
+    <div id="gdash-panel" style="display:none">
+      <div class="dash-period-bar">
+        <div class="dash-presets">
+          <button class="btn btn-ghost" id="gdash-preset-week">Esta semana</button>
+          <button class="btn btn-ghost" id="gdash-preset-month">Este mês</button>
+          <button class="btn btn-ghost active" id="gdash-preset-all">Todos os projetos</button>
+        </div>
+      </div>
+      <div class="stats-row" id="gdash-stats-row"></div>
+      <div class="dash-breakdown" id="gdash-breakdown"></div>
+    </div>
 
     <div class="sector-section-title">Setores</div>
     <div class="sector-grid" id="sector-grid"></div>
@@ -1047,6 +1055,13 @@ function projectsForSector(sectorId){
   return projects.filter(p => p.sector === sectorId);
 }
 // ---- Dashboard geral (tela de Setores) ----
+document.getElementById('btn-toggle-gdash').addEventListener('click', ()=>{
+  const panel = document.getElementById('gdash-panel');
+  const willShow = panel.style.display === 'none';
+  panel.style.display = willShow ? 'block' : 'none';
+  document.getElementById('btn-toggle-gdash').textContent = willShow ? '📊 Ocultar Dashboard geral' : '📊 Dashboard geral';
+  if(willShow) renderGlobalDashboard();
+});
 let gdashStart = '', gdashEnd = '';
 function setGdashPreset(p){
   const today = new Date();
@@ -1129,6 +1144,149 @@ function renderGlobalDashboard(){
   }
   document.getElementById('gdash-breakdown').innerHTML = html;
 }
+
+// ---- Relatório em PDF (geral ou por setor) ----
+function barRowHtmlReport(rows){
+  if(!rows || rows.length===0) return '<div style="font-size:12px;color:#6B7280">Sem dados.</div>';
+  return rows.map(r=>`
+    <div class="bar-row">
+      <span class="lbl">${escapeHtml(r.label)}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${r.avg}%"></div></div>
+      <span class="bar-val">${r.avg}% (${r.count})</span>
+    </div>`).join('');
+}
+function generateReport(scope){
+  let list, title;
+  if(scope.type === 'sector'){
+    list = projectsForSector(scope.sector.id);
+    title = 'Relatório do setor — ' + scope.sector.name;
+  }else{
+    list = projects.slice();
+    title = 'Relatório geral — todos os setores';
+  }
+
+  const lastPhase = phases[phases.length-1];
+  const doneCount = list.filter(p=>p.phase===lastPhase?.id).length;
+  const completionPct = list.length ? Math.round((doneCount/list.length)*100) : 0;
+  const avgProgress = list.length ? Math.round(list.reduce((s,p)=>s+(p.progress||0),0)/list.length) : 0;
+  const lateCount = list.filter(p=> p.phase!==lastPhase?.id && p.endDate && daysDiff(p.endDate) < 0).length;
+  const onTimeCount = Math.max(0, list.length - doneCount - lateCount);
+  const doneP = list.length ? (doneCount/list.length)*100 : 0;
+  const lateP = list.length ? (lateCount/list.length)*100 : 0;
+  const gradient = `conic-gradient(#2FBF71 0% ${doneP}%, #F0473C ${doneP}% ${doneP+lateP}%, #0EA5A5 ${doneP+lateP}% 100%)`;
+
+  const byArea = groupByField(list, 'area');
+  const byManager = currentUser.isAdmin ? groupByField(list, 'manager') : null;
+  let bySector = null;
+  if(scope.type === 'global'){
+    const map = {};
+    list.forEach(p=>{
+      const name = sectors.find(s=>s.id===p.sector)?.name || 'Sem setor';
+      if(!map[name]) map[name] = {count:0, sum:0};
+      map[name].count++; map[name].sum += (p.progress||0);
+    });
+    bySector = Object.entries(map).map(([k,v])=>({label:k, count:v.count, avg:Math.round(v.sum/v.count)})).sort((a,b)=>b.count-a.count);
+  }
+
+  const rowsHtml = list.map(p=>{
+    const phaseName = phases.find(ph=>ph.id===p.phase)?.name || '—';
+    const st = statusOf(p);
+    return `<tr>
+      <td>${escapeHtml(p.name)}</td>
+      <td>${escapeHtml(p.area||'—')}</td>
+      <td>${escapeHtml(p.manager||'—')}</td>
+      <td>${escapeHtml(phaseName)}</td>
+      <td>${escapeHtml(p.priority||'—')}</td>
+      <td>${p.progress||0}%</td>
+      <td>${fmtDate(p.startDate)}</td>
+      <td>${fmtDate(p.endDate)}</td>
+      <td>${escapeHtml(st.label)}</td>
+    </tr>`;
+  }).join('');
+
+  const generatedAt = new Date().toLocaleString('pt-BR');
+
+  const html = `<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><title>${escapeHtml(title)}</title>
+<style>
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box; }
+  body{ font-family: Arial, Helvetica, sans-serif; color:#12141C; margin:0; padding:36px 42px; }
+  h1{ font-size:21px; margin:0 0 4px; }
+  .meta{ font-family: monospace; font-size:11px; color:#6B7280; margin-bottom:26px; }
+  .stats{ display:flex; gap:14px; margin-bottom:26px; }
+  .stat{ flex:1; border:1px solid #E5E7EB; border-radius:10px; padding:14px 16px; }
+  .stat .v{ font-size:22px; font-weight:700; }
+  .stat .l{ font-size:10px; color:#6B7280; text-transform:uppercase; margin-top:4px; }
+  .section{ margin-bottom:26px; page-break-inside:avoid; }
+  .section h2{ font-size:14px; margin:0 0 12px; border-bottom:1px solid #E5E7EB; padding-bottom:6px; }
+  .donut-wrap{ display:flex; align-items:center; gap:26px; }
+  .donut{ width:104px;height:104px;border-radius:50%; background:${gradient}; position:relative; flex-shrink:0; }
+  .donut::after{ content:''; position:absolute; inset:16px; background:#fff; border-radius:50%; }
+  .legend div{ margin-bottom:7px; font-size:12.5px; }
+  .dot{ display:inline-block; width:9px;height:9px;border-radius:50%; margin-right:7px; }
+  table{ width:100%; border-collapse:collapse; font-size:10.5px; }
+  th{ text-align:left; background:#F4F5F7; padding:7px 8px; border-bottom:1px solid #E5E7EB; }
+  td{ padding:6px 8px; border-bottom:1px solid #EDEFF2; }
+  .bar-row{ display:flex; align-items:center; gap:10px; font-size:12px; margin-bottom:8px; }
+  .bar-row .lbl{ width:130px; flex-shrink:0; }
+  .bar-track{ flex:1; height:6px; background:#EDEFF2; border-radius:6px; overflow:hidden; }
+  .bar-fill{ height:100%; background:#5B5BF6; }
+  .bar-val{ width:60px; text-align:right; flex-shrink:0; }
+  footer{ margin-top:20px; font-size:9.5px; color:#9CA3AF; text-align:center; }
+  @media print{ @page{ size:A4; margin:16mm; } }
+</style></head>
+<body>
+  <h1>${escapeHtml(title)}</h1>
+  <div class="meta">Data de extração: ${generatedAt} — Centro de Operações Urbam</div>
+
+  <div class="stats">
+    <div class="stat"><div class="v">${list.length}</div><div class="l">Total de projetos</div></div>
+    <div class="stat"><div class="v">${completionPct}%</div><div class="l">Concluídos (${doneCount}/${list.length})</div></div>
+    <div class="stat"><div class="v">${avgProgress}%</div><div class="l">Progresso médio</div></div>
+    <div class="stat"><div class="v">${lateCount}</div><div class="l">Atrasados</div></div>
+  </div>
+
+  <div class="section">
+    <h2>Distribuição de status</h2>
+    <div class="donut-wrap">
+      <div class="donut"></div>
+      <div class="legend">
+        <div><span class="dot" style="background:#2FBF71"></span>Concluído — ${doneCount}</div>
+        <div><span class="dot" style="background:#F0473C"></span>Atrasado — ${lateCount}</div>
+        <div><span class="dot" style="background:#0EA5A5"></span>No prazo — ${onTimeCount}</div>
+      </div>
+    </div>
+  </div>
+
+  ${bySector ? `<div class="section"><h2>Progresso médio por setor</h2>${barRowHtmlReport(bySector)}</div>` : ''}
+  <div class="section"><h2>Progresso médio por área</h2>${barRowHtmlReport(byArea)}</div>
+  ${byManager ? `<div class="section"><h2>Progresso médio por gestor</h2>${barRowHtmlReport(byManager)}</div>` : ''}
+
+  <div class="section">
+    <h2>Lista de projetos (${list.length})</h2>
+    <table>
+      <thead><tr><th>Projeto</th><th>Área</th><th>Gestor</th><th>Etapa</th><th>Prioridade</th><th>Progresso</th><th>Início</th><th>Fim</th><th>Status</th></tr></thead>
+      <tbody>${rowsHtml || '<tr><td colspan="9">Nenhum projeto neste escopo.</td></tr>'}</tbody>
+    </table>
+  </div>
+
+  <footer>Relatório gerado automaticamente pelo Painel de Projetos — Centro de Operações Urbam</footer>
+</body></html>`;
+
+  const win = window.open('', '_blank');
+  if(!win){ toast('Seu navegador bloqueou a janela do relatório — permita pop-ups para este site'); return; }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+  win.onload = () => { win.focus(); win.print(); };
+}
+document.getElementById('btn-global-report').addEventListener('click', ()=>{
+  generateReport({type:'global'});
+});
+document.getElementById('btn-sector-report').addEventListener('click', ()=>{
+  if(!currentSector) return;
+  generateReport({type:'sector', sector: currentSector});
+});
 
 function renderSectorGrid(){
   const grid = document.getElementById('sector-grid');
