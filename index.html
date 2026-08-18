@@ -58,6 +58,11 @@
     font-family:var(--font-display);font-weight:700;font-size:22px;margin:0 0 2px;letter-spacing:-0.02em;
   }
   .title-block .sub{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);letter-spacing:.02em;}
+  .back-arrow-btn{
+    background:none;border:1px solid var(--border);border-radius:9px;font-size:18px;line-height:1;
+    width:34px;height:34px;cursor:pointer;color:var(--ink);flex-shrink:0;transition:all .15s ease;
+  }
+  .back-arrow-btn:hover{background:var(--paper);border-color:var(--primary);color:var(--primary);}
   .header-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
   .btn{
     font-family:var(--font-body);font-weight:600;font-size:13.5px;border:1px solid var(--border);
@@ -348,8 +353,7 @@
   .sector-card .sector-icon{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg, var(--primary), var(--teal));display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:14px;}
   .sector-card .sector-name{font-family:var(--font-display);font-weight:600;font-size:15.5px;margin-bottom:4px;}
   .sector-card .sector-count{font-family:var(--font-mono);font-size:11.5px;color:var(--ink-soft);}
-  .sector-card .sector-menu{position:absolute;top:14px;right:14px;display:flex;gap:4px;opacity:0;transition:opacity .15s ease;}
-  .sector-card:hover .sector-menu{opacity:1;}
+  .sector-card .sector-menu{position:absolute;top:14px;right:14px;display:flex;gap:4px;}
   .sector-card .sector-menu button{background:var(--paper);border:1px solid var(--border);border-radius:6px;width:24px;height:24px;font-size:11px;cursor:pointer;color:var(--ink-soft);}
   .sector-card .sector-menu button:hover{border-color:var(--primary);color:var(--primary);}
   .sector-card.add-sector{
@@ -404,8 +408,13 @@
   <header>
     <div class="header-row header-row-top">
       <div class="title-block">
-        <h1>Painel de Projetos</h1>
-        <div class="sub" id="header-sub">DADOS COMPARTILHADOS</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <button id="btn-back-arrow" class="back-arrow-btn" style="display:none" title="Voltar para o Painel de Projetos">←</button>
+          <div>
+            <h1>Painel de Projetos</h1>
+            <div class="sub" id="header-sub">DADOS COMPARTILHADOS</div>
+          </div>
+        </div>
       </div>
       <div class="header-actions">
         <span class="user-badge" id="user-badge"></span>
@@ -417,7 +426,6 @@
           </div>
         </div>
         <button class="btn btn-ghost" id="btn-history" style="display:none">🕒 Histórico</button>
-        <button class="btn btn-ghost" id="btn-back-sectors" style="display:none">← Setores</button>
         <button class="btn btn-ghost" id="btn-global-calendar">📅 Calendário geral</button>
         <div class="view-toggle" id="workspace-view-toggle" style="display:none">
           <button id="tab-kanban" class="active">KANBAN</button>
@@ -1424,7 +1432,7 @@ function enterSector(s){
   document.getElementById('view-sectors').style.display = 'none';
   document.getElementById('view-global-calendar').style.display = 'none';
   document.getElementById('project-workspace').style.display = 'block';
-  document.getElementById('btn-back-sectors').style.display = 'inline-block';
+  document.getElementById('btn-back-arrow').style.display = 'inline-block';
   document.getElementById('workspace-view-toggle').style.display = 'flex';
   document.getElementById('workspace-actions').style.display = 'flex';
   document.getElementById('btn-new').style.display = (s.id === '__none__') ? 'none' : 'inline-block';
@@ -1436,7 +1444,7 @@ function backToSectorsUI(){
   document.getElementById('view-sectors').style.display = 'block';
   document.getElementById('view-global-calendar').style.display = 'none';
   document.getElementById('project-workspace').style.display = 'none';
-  document.getElementById('btn-back-sectors').style.display = 'none';
+  document.getElementById('btn-back-arrow').style.display = 'none';
   document.getElementById('workspace-view-toggle').style.display = 'none';
   document.getElementById('workspace-actions').style.display = 'none';
   const isAdmin = currentUser && currentUser.isAdmin;
@@ -1446,7 +1454,7 @@ function backToSectorsUI(){
   renderSectorGrid();
     renderGlobalDashboard();
 }
-document.getElementById('btn-back-sectors').addEventListener('click', ()=>{
+document.getElementById('btn-back-arrow').addEventListener('click', ()=>{
   currentSector = null;
   backToSectorsUI();
 });
@@ -1459,7 +1467,7 @@ function showGlobalCalendar(){
   document.getElementById('view-sectors').style.display = 'none';
   document.getElementById('project-workspace').style.display = 'none';
   document.getElementById('view-global-calendar').style.display = 'block';
-  document.getElementById('btn-back-sectors').style.display = 'inline-block';
+  document.getElementById('btn-back-arrow').style.display = 'inline-block';
   document.getElementById('workspace-view-toggle').style.display = 'none';
   document.getElementById('workspace-actions').style.display = 'none';
   document.getElementById('header-sub').textContent = 'Calendário geral — todos os setores';
