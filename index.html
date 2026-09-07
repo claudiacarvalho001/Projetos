@@ -13,7 +13,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <style>
   :root{
-    --paper:#F4F5F7;
+    --paper:#EEEFF7;
     --paper-line:#EDEFF2;
     --card-bg:#FFFFFF;
     --ink:#12141C;
@@ -498,6 +498,7 @@
       </div>
     </div>
     <div class="header-row header-row-bottom" id="workspace-actions" style="display:none">
+      <button class="btn btn-ghost" id="btn-phases">⚙️ Etapas deste setor</button>
       <button class="btn btn-ghost" id="btn-theme">Cores</button>
       <button class="btn btn-ghost" id="btn-export">Exportar CSV</button>
       <button class="btn btn-ghost" id="btn-sector-report">📄 Relatório do setor (PDF)</button>
@@ -512,7 +513,6 @@
       <button class="btn btn-ghost" id="btn-global-pops">📋 Novos tópicos</button>
     </div>
     <div class="gdash-toggle-row" id="admin-tools-row" style="display:none">
-      <button class="btn btn-ghost" id="btn-phases">⚙️ Etapas do quadro</button>
       <button class="btn btn-ghost" id="btn-managers-open">⚙️ Gestores</button>
       <button class="btn btn-ghost" id="btn-import">⚙️ Importar planilha</button>
       <input type="file" id="import-file-input" accept=".csv,.xlsx,.xls" style="display:none">
@@ -580,11 +580,6 @@
         <option value="Urgente">Urgente</option>
       </select>
       <select id="f-tag"><option value="">Todas as tags</option></select>
-      <select id="f-type">
-        <option value="">Projetos e POPs</option>
-        <option value="Projeto">Só projetos</option>
-        <option value="POP">Só POPs</option>
-      </select>
       <input type="text" id="f-search" placeholder="Buscar projeto...">
       <span class="count" id="count-label"></span>
     </div>
@@ -745,7 +740,7 @@
 <!-- Modal etapas -->
 <div class="overlay" id="modal-phases" style="display:none">
   <div class="modal">
-    <h2>Etapas do quadro</h2>
+    <h2 id="modal-phases-title">Etapas do quadro</h2>
     <div class="phase-list" id="phase-list"></div>
     <button class="btn btn-ghost" id="btn-add-phase" style="width:100%">+ Adicionar etapa</button>
     <div class="modal-actions">
@@ -1103,7 +1098,7 @@ const DEFAULT_PHASES = [
 ];
 const PRIO_COLOR = {Baixa:'var(--sage)', 'Média':'var(--teal)', Alta:'var(--amber)', Urgente:'var(--brick)'};
 
-const DEFAULT_THEME = {paper:'#EDEAE0', card:'#FBF9F4', ink:'#1F3552', teal:'#3E7C74', amber:'#C97D2E', brick:'#B2503F', sage:'#6B8F71'};
+const DEFAULT_THEME = {paper:'#EEEFF7', card:'#FBF9F4', ink:'#1F3552', teal:'#3E7C74', amber:'#C97D2E', brick:'#B2503F', sage:'#6B8F71'};
 const THEME_PRESETS = [
   {name:'Blueprint (padrão)', ...DEFAULT_THEME},
   {name:'Verde floresta', paper:'#EAEEE6', card:'#F8FAF5', ink:'#22402E', teal:'#3E7C74', amber:'#B8863B', brick:'#A6473A', sage:'#6B8F71'},
@@ -1203,11 +1198,23 @@ document.getElementById('btn-theme-save').addEventListener('click', async ()=>{
   toast('Cores aplicadas para todos');
 });
 
-let phases = [];
+let phases = []; // fases relevantes ao setor atualmente aberto (sincronizado por syncCurrentPhases)
+let sectorPhasesMap = {}; // { sectorId: [{id,name}, ...] } — cada setor com sua própria lista
 let projects = [];
 let currentView = 'kanban';
 let sortKey = null, sortAsc = true;
 let statusFilter = null; // null | 'late' | 'done'
+
+function phasesForSector(sectorId){
+  const key = sectorId || '__none__';
+  return (sectorPhasesMap[key] && sectorPhasesMap[key].length) ? sectorPhasesMap[key] : DEFAULT_PHASES;
+}
+function currentPhases(){
+  return phasesForSector(currentSector ? currentSector.id : '__none__');
+}
+function syncCurrentPhases(){
+  phases = currentPhases();
+}
 
 function toast(msg){
   const t = document.getElementById('toast');
@@ -1223,10 +1230,13 @@ function subscribeData(){
   }, err=>console.error(err));
 
   if(unsubscribePhases) unsubscribePhases();
-  unsubscribePhases = db.collection('config').doc('phases').onSnapshot(doc=>{
-    phases = doc.exists && doc.data().list ? doc.data().list : DEFAULT_PHASES;
+  unsubscribePhases = db.collection('sectorPhases').onSnapshot(snap=>{
+    sectorPhasesMap = {};
+    snap.docs.forEach(d=>{ sectorPhasesMap[d.id] = (d.data().list)||[]; });
+    syncCurrentPhases();
     renderPhaseSelect();
     renderAll();
+    if(document.getElementById('view-global-pops').style.display==='block') renderGlobalPops();
   }, err=>console.error(err));
 
   if(unsubscribeManagers) unsubscribeManagers();
@@ -1330,11 +1340,10 @@ function renderGlobalDashboard(){
   const statsRow = document.getElementById('gdash-stats-row');
   if(!statsRow) return;
   const inPeriod = countableProjects(projects.filter(projectInGdashPeriod));
-  const lastPhase = phases[phases.length-1];
-  const doneCount = inPeriod.filter(p=>p.phase===lastPhase?.id).length;
+  const doneCount = inPeriod.filter(p=>isProjectDone(p)).length;
   const completionPct = inPeriod.length ? Math.round((doneCount/inPeriod.length)*100) : 0;
   const avgProgress = inPeriod.length ? Math.round(inPeriod.reduce((s,p)=>s+(p.progress||0),0)/inPeriod.length) : 0;
-  const lateCount = inPeriod.filter(p=> p.phase!==lastPhase?.id && p.endDate && daysDiff(p.endDate) < 0).length;
+  const lateCount = inPeriod.filter(p=> !isProjectDone(p) && p.endDate && daysDiff(p.endDate) < 0).length;
   const onTimeCount = Math.max(0, inPeriod.length - doneCount - lateCount);
 
   statsRow.innerHTML = `
@@ -1405,11 +1414,10 @@ function generateReport(scope){
   }
   const statsList = countableProjects(list);
 
-  const lastPhase = phases[phases.length-1];
-  const doneCount = statsList.filter(p=>p.phase===lastPhase?.id).length;
+  const doneCount = statsList.filter(p=>isProjectDone(p)).length;
   const completionPct = statsList.length ? Math.round((doneCount/statsList.length)*100) : 0;
   const avgProgress = statsList.length ? Math.round(statsList.reduce((s,p)=>s+(p.progress||0),0)/statsList.length) : 0;
-  const lateCount = statsList.filter(p=> p.phase!==lastPhase?.id && p.endDate && daysDiff(p.endDate) < 0).length;
+  const lateCount = statsList.filter(p=> !isProjectDone(p) && p.endDate && daysDiff(p.endDate) < 0).length;
   const onTimeCount = Math.max(0, statsList.length - doneCount - lateCount);
   const doneP = statsList.length ? (doneCount/statsList.length)*100 : 0;
   const lateP = statsList.length ? (lateCount/statsList.length)*100 : 0;
@@ -1429,7 +1437,7 @@ function generateReport(scope){
   }
 
   const rowsHtml = list.map(p=>{
-    const phaseName = phases.find(ph=>ph.id===p.phase)?.name || '—';
+    const phaseName = phasesForSector(p.sector).find(ph=>ph.id===p.phase)?.name || '—';
     const st = statusOf(p);
     return `<tr>
       <td>${escapeHtml(p.name)}</td>
@@ -1654,6 +1662,8 @@ document.getElementById('btn-delete-sector').addEventListener('click', async ()=
 
 function enterSector(s){
   currentSector = s;
+  syncCurrentPhases();
+  renderPhaseSelect();
   document.getElementById('view-sectors').style.display = 'none';
   document.getElementById('view-global-calendar').style.display = 'none';
   document.getElementById('view-global-pops').style.display = 'none';
@@ -1719,11 +1729,10 @@ document.getElementById('btn-global-pops').addEventListener('click', showGlobalP
 function renderGlobalPops(){
   if(!currentUser) return;
   const list = projects.filter(p=>p.type==='POP');
-  const lastPhase = phases[phases.length-1];
-  const doneCount = list.filter(p=>p.phase===lastPhase?.id).length;
+  const doneCount = list.filter(p=>isProjectDone(p)).length;
   const completionPct = list.length ? Math.round((doneCount/list.length)*100) : 0;
   const avgProgress = list.length ? Math.round(list.reduce((s,p)=>s+(p.progress||0),0)/list.length) : 0;
-  const lateCount = list.filter(p=> p.phase!==lastPhase?.id && p.endDate && daysDiff(p.endDate) < 0).length;
+  const lateCount = list.filter(p=> !isProjectDone(p) && p.endDate && daysDiff(p.endDate) < 0).length;
 
   document.getElementById('pops-stats-row').innerHTML = `
     <div class="stat-card"><div class="val">${list.length}</div><div class="lbl">Total de tópicos</div></div>
@@ -1738,7 +1747,7 @@ function renderGlobalPops(){
     return;
   }
   tbody.innerHTML = list.map(p=>{
-    const phaseName = phases.find(ph=>ph.id===p.phase)?.name || '—';
+    const phaseName = phasesForSector(p.sector).find(ph=>ph.id===p.phase)?.name || '—';
     const secName = sectors.find(s=>s.id===p.sector)?.name || 'Sem setor';
     const st = statusOf(p);
     const stColor = st.cls==='late' ? 'var(--brick)' : st.cls==='warn' ? 'var(--amber)' : st.cls==='done' ? 'var(--sage)' : 'var(--teal)';
@@ -1792,7 +1801,8 @@ const globalCalendarController = makeCalendarController({
 });
 
 async function savePhases(){
-  try{ await db.collection('config').doc('phases').set({list: phases}); }
+  const sectorId = currentSector ? currentSector.id : '__none__';
+  try{ await db.collection('sectorPhases').doc(sectorId).set({list: phases}); }
   catch(e){ toast('Erro ao salvar etapas (verifique permissões)'); }
 }
 async function saveProject(id, data){
@@ -1814,10 +1824,11 @@ function fmtDate(d){
   const [y,m,day] = d.split('-');
   return `${day}/${m}/${y}`;
 }
-function phaseBasedProgress(phaseId){
-  const idx = phases.findIndex(ph=>ph.id===phaseId);
-  if(idx < 0 || phases.length < 2) return null;
-  const raw = (idx / (phases.length - 1)) * 100;
+function phaseBasedProgress(phaseId, phasesList){
+  const list = phasesList || currentPhases();
+  const idx = list.findIndex(ph=>ph.id===phaseId);
+  if(idx < 0 || list.length < 2) return null;
+  const raw = (idx / (list.length - 1)) * 100;
   return Math.round(raw / 5) * 5; // arredonda pro múltiplo de 5 (mesmo passo do slider)
 }
 function hasActiveChecklist(p){
@@ -1829,8 +1840,14 @@ function daysDiff(d){
   const end = new Date(d+'T00:00:00');
   return Math.round((end - today)/86400000);
 }
+function isProjectDone(p){
+  const pp = phasesForSector(p.sector);
+  const lastPhase = pp[pp.length-1];
+  return p.phase === lastPhase?.id;
+}
 function statusOf(proj){
-  const lastPhase = phases[phases.length-1];
+  const projPhases = phasesForSector(proj.sector);
+  const lastPhase = projPhases[projPhases.length-1];
   if(proj.phase === lastPhase?.id) return {label:'Concluído', cls:'done'};
   if(proj.endDate){
     const diff = daysDiff(proj.endDate);
@@ -2679,12 +2696,20 @@ function renderPhaseModal(){
       const i = +btn.dataset.del;
       const removedId = phases[i].id;
       phases.splice(i,1);
-      projects.forEach(p=>{ if(p.phase===removedId) p.phase = phases[0].id; });
+      const affected = projects.filter(p=>matchesSector(p) && p.phase===removedId);
+      affected.forEach(p=>{
+        p.phase = phases[0].id;
+        saveProject(p.id, {phase: phases[0].id});
+      });
       renderPhaseModal();
     });
   });
 }
-document.getElementById('btn-phases').addEventListener('click', ()=>{ renderPhaseModal(); modalPhases.style.display='flex'; });
+document.getElementById('btn-phases').addEventListener('click', ()=>{
+  document.getElementById('modal-phases-title').textContent = 'Etapas — ' + (currentSector ? currentSector.name : '');
+  renderPhaseModal();
+  modalPhases.style.display='flex';
+});
 document.getElementById('btn-add-phase').addEventListener('click', ()=>{
   phases.push({id:'ph_'+Date.now().toString(36), name:'Nova etapa'});
   renderPhaseModal();
@@ -2699,9 +2724,10 @@ document.getElementById('btn-phases-done').addEventListener('click', async ()=>{
 });
 document.getElementById('btn-recalc-progress').addEventListener('click', async ()=>{
   if(!currentUser.isAdmin){ toast('Apenas administradores podem fazer isso'); return; }
-  const eligible = projects.filter(p => !hasActiveChecklist(p) && phaseBasedProgress(p.phase) !== null);
-  if(eligible.length === 0){ toast('Nenhum projeto elegível (todos têm checklist ou já estão ok)'); return; }
-  if(!confirm(`Isso vai recalcular o progresso de ${eligible.length} projeto(s) sem checklist, com base na etapa atual de cada um. Os valores manuais atuais serão substituídos. Continuar?`)) return;
+  const scopedProjects = projects.filter(matchesSector);
+  const eligible = scopedProjects.filter(p => !hasActiveChecklist(p) && phaseBasedProgress(p.phase) !== null);
+  if(eligible.length === 0){ toast('Nenhum projeto elegível neste setor (todos têm checklist ou já estão ok)'); return; }
+  if(!confirm(`Isso vai recalcular o progresso de ${eligible.length} projeto(s) deste setor, sem checklist, com base na etapa atual de cada um. Os valores manuais atuais serão substituídos. Continuar?`)) return;
   let ok = 0;
   for(const p of eligible){
     const newProgress = phaseBasedProgress(p.phase);
@@ -2736,7 +2762,7 @@ document.getElementById('tab-table').addEventListener('click', ()=>switchView('t
 document.getElementById('tab-dashboard').addEventListener('click', ()=>switchView('dashboard'));
 document.getElementById('tab-calendar').addEventListener('click', ()=>switchView('calendar'));
 
-['f-area','f-manager','f-priority','f-tag','f-type','f-search'].forEach(id=>{
+['f-area','f-manager','f-priority','f-tag','f-search'].forEach(id=>{
   document.getElementById(id).addEventListener('input', ()=>{
     renderAll();
     if(currentView==='dashboard') renderDashboard();
@@ -2972,11 +2998,10 @@ function renderDashboard(){
   if(!currentUser) return;
   const base = countableProjects(getBaseFiltered());
   const inPeriod = base.filter(projectInPeriod);
-  const lastPhase = phases[phases.length-1];
-  const doneCount = inPeriod.filter(p=>p.phase===lastPhase?.id).length;
+  const doneCount = inPeriod.filter(p=>isProjectDone(p)).length;
   const completionPct = inPeriod.length ? Math.round((doneCount/inPeriod.length)*100) : 0;
   const avgProgress = inPeriod.length ? Math.round(inPeriod.reduce((s,p)=>s+(p.progress||0),0)/inPeriod.length) : 0;
-  const lateCount = inPeriod.filter(p=> p.phase!==lastPhase?.id && p.endDate && daysDiff(p.endDate) < 0).length;
+  const lateCount = inPeriod.filter(p=> !isProjectDone(p) && p.endDate && daysDiff(p.endDate) < 0).length;
   const onTimeCount = Math.max(0, inPeriod.length - doneCount - lateCount);
 
   document.getElementById('dash-stats-row').innerHTML = `
@@ -3017,7 +3042,7 @@ document.getElementById('btn-export').addEventListener('click', ()=>{
   if(projects.length===0){ toast('Nenhum projeto para exportar'); return; }
   const headers = ['Nome','Área','Gestor','Etapa','Prioridade','Progresso (%)','Data início','Data fim','Status','Observações'];
   const rows = projects.map(p=>{
-    const phaseName = phases.find(ph=>ph.id===p.phase)?.name || '';
+    const phaseName = phasesForSector(p.sector).find(ph=>ph.id===p.phase)?.name || '';
     const st = statusOf(p);
     return [p.name,p.area,p.manager,phaseName,p.priority,p.progress||0,p.startDate,p.endDate,st.label,p.notes]
       .map(v=>`"${String(v||'').replace(/"/g,'""')}"`).join(',');
@@ -3079,11 +3104,12 @@ function normalizePriority(v){
   if(s.startsWith('med')) return 'Média';
   return 'Média';
 }
-function matchPhase(v){
+function matchPhase(v, phasesList){
+  const list = phasesList || currentPhases();
   const s = normalizeHeader(v);
-  if(!s) return phases[0]?.id;
-  const found = phases.find(ph=>normalizeHeader(ph.name)===s || normalizeHeader(ph.name).includes(s) || s.includes(normalizeHeader(ph.name)));
-  return found ? found.id : phases[0]?.id;
+  if(!s) return list[0]?.id;
+  const found = list.find(ph=>normalizeHeader(ph.name)===s || normalizeHeader(ph.name).includes(s) || s.includes(normalizeHeader(ph.name)));
+  return found ? found.id : list[0]?.id;
 }
 function matchManagerEmail(nameOrEmail){
   const s = normalizeHeader(nameOrEmail);
@@ -3111,6 +3137,7 @@ function rowsToProjects(rows, forceType){
     const mgr = matchManagerEmail(managerRaw);
     const sectorRaw = pickField(row, ['setor','área de atuação','area de atuacao','área','area de negocio']);
     const matchedSector = matchSectorByName(sectorRaw);
+    const resolvedSectorId = matchedSector || ((currentSector && currentSector.id!=='__none__') ? currentSector.id : '');
     const typeRaw = pickField(row, ['tipo','tipo de item','categoria']);
     return {
       name: String(pickField(row, ['nome','projeto','nome do projeto','pop','nome do pop'])).trim(),
@@ -3119,13 +3146,13 @@ function rowsToProjects(rows, forceType){
       managerEmail: mgr.email,
       startDate: parseDateFlexible(pickField(row, ['data inicio','data de inicio','inicio'])),
       endDate: parseDateFlexible(pickField(row, ['data fim','data de fim','fim','prazo'])),
-      phase: matchPhase(pickField(row, ['etapa','fase','status'])),
+      phase: matchPhase(pickField(row, ['etapa','fase','status']), phasesForSector(resolvedSectorId)),
       priority: normalizePriority(pickField(row, ['prioridade'])),
       type: forceType || (/pop/i.test(typeRaw) ? 'POP' : 'Projeto'),
       progress: Math.min(100, Math.max(0, parseInt(pickField(row, ['progresso','progresso (%)','%']))||0)),
       checklist: [],
       image: '',
-      sector: matchedSector || ((currentSector && currentSector.id!=='__none__') ? currentSector.id : ''),
+      sector: resolvedSectorId,
       notes: String(pickField(row, ['observacoes','observações','notas','descricao','descrição'])).trim()
     };
   }).filter(p=>p.name);
