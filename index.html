@@ -145,6 +145,8 @@
   }
   .tag-custom .tag-remove{cursor:pointer;opacity:.8;font-size:10px;}
   .tag-custom .tag-remove:hover{opacity:1;}
+  .tag-clickable{cursor:pointer;transition:transform .1s ease,box-shadow .1s ease;}
+  .tag-clickable:hover{transform:scale(1.06);box-shadow:0 0 0 2px rgba(0,0,0,.12);}
   .tag-chip-add{
     display:inline-flex;align-items:center;justify-content:center;
     width:26px;height:26px;border-radius:50%;border:2px dashed var(--border);
@@ -2079,7 +2081,7 @@ function renderGlobalTable(){
     return `<tr data-id="${p.id}">
       <td><input type="checkbox" class="gt-select" data-id="${p.id}" ${checked}></td>
       <td style="cursor:pointer"><strong>${newBadge}${p.type==='POP'?'<span class="pop-badge">POP</span> ':''}${escapeHtml(p.name)}</strong></td>
-      <td>${resolveTags(p).length>0 ? resolveTags(p).map(t=>`<span class="tag-custom" style="background:${t.color}">${escapeHtml(t.text)}</span>`).join(' ') : '—'}</td>
+      <td>${resolveTags(p).length>0 ? resolveTags(p).map(t=>`<span class="tag-custom tag-clickable" data-tag-filter="${t.id}" title="Filtrar por essa tag" style="background:${t.color}">${escapeHtml(t.text)}</span>`).join(' ') : '—'}</td>
       <td>${escapeHtml(secName)}</td>
       <td>${p.sectorRaw ? `<span style="font-size:11px;color:var(--ink-soft)">${escapeHtml(p.sectorRaw)}</span>` : '—'}</td>
       <td>${escapeHtml(p.area||'—')}</td>
@@ -2101,6 +2103,13 @@ function renderGlobalTable(){
       const s = sectors.find(x=>x.id===p.sector) || {id:'__none__', name:'Sem setor'};
       enterSector(s);
       setTimeout(()=>openEdit(p.id), 0);
+    });
+  });
+  tbody.querySelectorAll('.tag-clickable').forEach(chip=>{
+    chip.addEventListener('click', e=>{
+      e.stopPropagation();
+      document.getElementById('gt-tag-filter').value = chip.dataset.tagFilter;
+      renderGlobalTable();
     });
   });
   tbody.querySelectorAll('.gt-select').forEach(cb=>{
@@ -2504,7 +2513,7 @@ function renderTable(){
     return `<tr data-id="${p.id}">
       <td><input type="checkbox" class="row-select" data-id="${p.id}" ${checked}></td>
       <td style="cursor:pointer"><strong>${p.type==='POP'?'<span class="pop-badge">POP</span> ':''}${escapeHtml(p.name)}</strong></td>
-      <td>${resolveTags(p).length>0 ? resolveTags(p).map(t=>`<span class="tag-custom" style="background:${t.color}">${escapeHtml(t.text)}</span>`).join(' ') : '—'}</td>
+      <td>${resolveTags(p).length>0 ? resolveTags(p).map(t=>`<span class="tag-custom tag-clickable" data-tag-filter="${t.id}" title="Filtrar por essa tag" style="background:${t.color}">${escapeHtml(t.text)}</span>`).join(' ') : '—'}</td>
       <td>${escapeHtml(p.area||'—')}</td>
       <td>${escapeHtml(p.manager||'—')}</td>
       <td><span class="pill" style="border-color:var(--border)">${escapeHtml(phaseName)}</span></td>
@@ -2522,6 +2531,13 @@ function renderTable(){
   }).join('');
   tbody.querySelectorAll('tr[data-id] td:not(:first-child)').forEach(td=>{
     td.addEventListener('click', ()=>openEdit(td.closest('tr').dataset.id));
+  });
+  tbody.querySelectorAll('.tag-clickable').forEach(chip=>{
+    chip.addEventListener('click', e=>{
+      e.stopPropagation();
+      document.getElementById('f-tag').value = chip.dataset.tagFilter;
+      renderAll();
+    });
   });
   tbody.querySelectorAll('.row-select').forEach(cb=>{
     cb.addEventListener('click', e=>e.stopPropagation());
