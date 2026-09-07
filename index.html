@@ -1251,7 +1251,8 @@ let statusFilter = null; // null | 'late' | 'done'
 
 function phasesForSector(sectorId){
   const key = sectorId || '__none__';
-  return (sectorPhasesMap[key] && sectorPhasesMap[key].length) ? sectorPhasesMap[key] : DEFAULT_PHASES;
+  const source = (sectorPhasesMap[key] && sectorPhasesMap[key].length) ? sectorPhasesMap[key] : DEFAULT_PHASES;
+  return source.map(ph => ({...ph})); // cópia independente — nunca a mesma referência entre setores
 }
 function currentPhases(){
   return phasesForSector(currentSector ? currentSector.id : '__none__');
