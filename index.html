@@ -22,9 +22,9 @@
     --primary:#5B5BF6;
     --primary-hover:#4747E0;
     --teal:#0EA5A5;
-    --amber:#FFB300;
-    --brick:#FF3B30;
-    --sage:#00C853;
+    --amber:#FFC400;
+    --brick:#FF1E1E;
+    --sage:#00E676;
     --font-display:'Space Grotesk',sans-serif;
     --font-body:'Inter',sans-serif;
     --font-mono:'IBM Plex Mono',monospace;
@@ -225,6 +225,13 @@
     display:flex;align-items:center;gap:10px;background:var(--card-bg);border:1px solid var(--primary);
     border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:var(--ink);
   }
+  .draft-row{background:rgba(91,91,246,.06);}
+  .draft-row td{padding:6px 8px;}
+  .draft-row input, .draft-row select{
+    width:100%;font-size:12.5px;padding:6px 7px;border:1px solid var(--border);border-radius:7px;
+    background:var(--card-bg);color:var(--ink);
+  }
+  .draft-row .icon-btn{padding:5px 9px;}
   .bulk-bar #bulk-count{font-weight:600;margin-right:4px;}
   .table-wrap{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow-sm);}
   table{width:100%;border-collapse:collapse;font-size:13px;}
@@ -546,8 +553,10 @@
   </div>
 
   <div id="view-global-table" style="display:none">
-    <div class="gdash-toggle-row" id="table-admin-tools-row" style="display:none">
-      <button class="btn btn-primary" id="btn-import">⬆️ Importar planilha</button>
+    <div class="gdash-toggle-row" id="table-admin-tools-row">
+      <button class="btn btn-primary" id="btn-global-new" style="display:none">+ Novo projeto</button>
+      <button class="btn btn-ghost" id="btn-import" style="display:none">Importar</button>
+      <button class="btn btn-ghost" id="btn-global-export">Exportar</button>
       <input type="file" id="import-file-input" accept=".csv,.xlsx,.xls" style="display:none">
     </div>
     <div class="stats-row" id="gt-stats-row"></div>
@@ -561,6 +570,7 @@
     </div>
     <div class="filters">
       <select id="gt-sector-filter"><option value="">Todos os setores</option></select>
+      <select id="gt-tag-filter"><option value="">Todas as tags</option></select>
       <input type="text" id="gt-search" placeholder="Buscar projeto...">
       <label class="check-inline" style="white-space:nowrap"><input type="checkbox" id="gt-only-new"> 🆕 Só pendentes de revisão</label>
       <span class="count" id="gt-count-label"></span>
@@ -570,7 +580,7 @@
         <thead>
           <tr>
             <th style="width:32px"><input type="checkbox" id="gt-select-all"></th>
-            <th>Projeto</th><th>Setor</th><th>Setor sugerido</th><th>Área</th><th>Gestor</th><th>Etapa</th>
+            <th>Projeto</th><th>Tags</th><th>Setor</th><th>Setor sugerido</th><th>Área</th><th>Gestor</th><th>Etapa</th>
             <th>Prioridade</th><th>Progresso</th><th>Início</th><th>Fim</th><th>Status</th>
           </tr>
         </thead>
@@ -1142,7 +1152,7 @@ const DEFAULT_PHASES = [
 ];
 const PRIO_COLOR = {Baixa:'var(--sage)', 'Média':'var(--teal)', Alta:'var(--amber)', Urgente:'var(--brick)'};
 
-const DEFAULT_THEME = {paper:'#EEEFF7', card:'#FBF9F4', ink:'#1F3552', teal:'#3E7C74', amber:'#FFB300', brick:'#FF3B30', sage:'#00C853'};
+const DEFAULT_THEME = {paper:'#EEEFF7', card:'#FBF9F4', ink:'#1F3552', teal:'#3E7C74', amber:'#FFC400', brick:'#FF1E1E', sage:'#00E676'};
 const THEME_PRESETS = [
   {name:'Blueprint (padrão)', ...DEFAULT_THEME},
   {name:'Verde floresta', paper:'#EAEEE6', card:'#F8FAF5', ink:'#22402E', teal:'#3E7C74', amber:'#B8863B', brick:'#A6473A', sage:'#6B8F71'},
@@ -1308,6 +1318,10 @@ function subscribeData(){
     renderTagPicker();
     populateTagFilter();
     renderAll();
+    if(document.getElementById('view-global-table').style.display==='block'){
+      populateGlobalTableSectorFilter();
+      renderGlobalTable();
+    }
   }, err=>console.error(err));
 
   if(unsubscribeAccessRequests) unsubscribeAccessRequests();
@@ -1858,17 +1872,40 @@ function showGlobalTable(onlyNew){
   document.getElementById('workspace-view-toggle').style.display = 'none';
   document.getElementById('workspace-actions').style.display = 'none';
   document.getElementById('header-sub').textContent = 'Tabela geral — todos os setores';
-  document.getElementById('table-admin-tools-row').style.display = currentUser.isAdmin ? 'flex' : 'none';
+  document.getElementById('btn-global-new').style.display = currentUser.isAdmin ? 'inline-block' : 'none';
+  document.getElementById('btn-import').style.display = currentUser.isAdmin ? 'inline-block' : 'none';
   if(typeof onlyNew === 'boolean') document.getElementById('gt-only-new').checked = onlyNew;
   populateGlobalTableSectorFilter();
   selectedGlobalIds.clear();
   gtStatusFilter = null;
+  draftRowActive = false;
   renderGlobalTable();
 }
 document.getElementById('btn-global-table').addEventListener('click', ()=>showGlobalTable());
 document.getElementById('gt-search').addEventListener('input', renderGlobalTable);
 document.getElementById('gt-sector-filter').addEventListener('change', renderGlobalTable);
+document.getElementById('gt-tag-filter').addEventListener('change', renderGlobalTable);
 document.getElementById('gt-only-new').addEventListener('change', renderGlobalTable);
+let draftRowActive = false;
+let draftRowData = {};
+function resetDraftData(){
+  const firstSector = sectors[0]?.id || '';
+  draftRowData = {
+    name:'', sector:firstSector, area:'', manager:'',
+    phase: phasesForSector(firstSector)[0]?.id || '',
+    priority:'Média', startDate:'', endDate:''
+  };
+}
+document.getElementById('btn-global-new').addEventListener('click', ()=>{
+  if(sectors.length===0){ toast('Crie um setor primeiro'); return; }
+  if(draftRowActive) return;
+  draftRowActive = true;
+  resetDraftData();
+  renderGlobalTable();
+});
+document.getElementById('btn-global-export').addEventListener('click', ()=>{
+  exportProjectsToExcel(currentGlobalTableList());
+});
 function populateGlobalTableSectorFilter(){
   const sel = document.getElementById('gt-sector-filter');
   const cur = sel.value;
@@ -1880,6 +1917,88 @@ function populateGlobalTableSectorFilter(){
   const curBulk = bulkSel.value;
   bulkSel.innerHTML = sectors.map(s=>`<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
   if(curBulk) bulkSel.value = curBulk;
+  const tagSel = document.getElementById('gt-tag-filter');
+  const curTag = tagSel.value;
+  tagSel.innerHTML = '<option value="">Todas as tags</option>' +
+    tagRegistry.map(t=>`<option value="${t.id}">${escapeHtml(t.text)}</option>`).join('');
+  tagSel.value = curTag;
+}
+function draftRowHtml(){
+  const sectorOptions = sectors.map(s=>`<option value="${s.id}" ${s.id===draftRowData.sector?'selected':''}>${escapeHtml(s.name)}</option>`).join('');
+  const phaseOptions = phasesForSector(draftRowData.sector).map(ph=>`<option value="${ph.id}" ${ph.id===draftRowData.phase?'selected':''}>${escapeHtml(ph.name)}</option>`).join('');
+  const prioOptions = ['Baixa','Média','Alta','Urgente'].map(p=>`<option ${p===draftRowData.priority?'selected':''}>${p}</option>`).join('');
+  return `<tr class="draft-row">
+    <td></td>
+    <td><input type="text" id="draft-name" placeholder="Nome do projeto" value="${escapeHtml(draftRowData.name)}" autofocus></td>
+    <td style="color:var(--ink-soft);font-size:11px">adicione depois</td>
+    <td><select id="draft-sector">${sectorOptions}</select></td>
+    <td>—</td>
+    <td><input type="text" id="draft-area" placeholder="Área" value="${escapeHtml(draftRowData.area)}"></td>
+    <td><input type="text" id="draft-manager" placeholder="Gestor" value="${escapeHtml(draftRowData.manager)}"></td>
+    <td><select id="draft-phase">${phaseOptions}</select></td>
+    <td><select id="draft-priority">${prioOptions}</select></td>
+    <td>0%</td>
+    <td><input type="date" id="draft-start" value="${draftRowData.startDate}"></td>
+    <td><input type="date" id="draft-end" value="${draftRowData.endDate}"></td>
+    <td style="white-space:nowrap">
+      <button type="button" class="icon-btn" id="draft-save" title="Salvar">✓</button>
+      <button type="button" class="icon-btn" id="draft-cancel" title="Cancelar">✕</button>
+    </td>
+  </tr>`;
+}
+function wireDraftRow(){
+  if(!draftRowActive) return;
+  const bindText = (id, field)=>{
+    document.getElementById(id).addEventListener('input', e=>{ draftRowData[field] = e.target.value; });
+  };
+  bindText('draft-name','name');
+  bindText('draft-area','area');
+  bindText('draft-manager','manager');
+  bindText('draft-start','startDate');
+  bindText('draft-end','endDate');
+  document.getElementById('draft-phase').addEventListener('change', e=>{ draftRowData.phase = e.target.value; });
+  document.getElementById('draft-priority').addEventListener('change', e=>{ draftRowData.priority = e.target.value; });
+  document.getElementById('draft-sector').addEventListener('change', e=>{
+    draftRowData.sector = e.target.value;
+    draftRowData.phase = phasesForSector(draftRowData.sector)[0]?.id || '';
+    renderGlobalTable();
+  });
+  document.getElementById('draft-cancel').addEventListener('click', ()=>{
+    draftRowActive = false;
+    renderGlobalTable();
+  });
+  document.getElementById('draft-save').addEventListener('click', async ()=>{
+    if(!draftRowData.name.trim()){ toast('Digite o nome do projeto'); return; }
+    const data = {
+      name: draftRowData.name.trim(),
+      area: draftRowData.area.trim(),
+      manager: draftRowData.manager.trim(),
+      managerEmail: currentUser.isAdmin ? '' : currentUser.email,
+      sector: draftRowData.sector,
+      phase: draftRowData.phase,
+      priority: draftRowData.priority,
+      startDate: draftRowData.startDate,
+      endDate: draftRowData.endDate,
+      progress: 0,
+      type: 'Projeto',
+      checklist: [],
+      tags: [],
+      image: '',
+      pinned: false,
+      countInStats: true,
+      newTopic: false,
+      notes: ''
+    };
+    const newId = await saveProject(null, data);
+    if(!newId){ return; }
+    projects.push({id:newId, ...data}); // otimista — o listener em tempo real substitui isso em seguida
+    draftRowActive = false;
+    toast('Projeto criado — abrindo card para completar');
+    const s = sectors.find(x=>x.id===data.sector) || {id:'__none__', name:'Sem setor'};
+    enterSector(s);
+    setTimeout(()=>openEdit(newId), 0);
+  });
+  document.getElementById('draft-name').focus();
 }
 function renderGlobalTableBulkBar(){
   const bar = document.getElementById('gt-bulk-bar');
@@ -1887,12 +2006,12 @@ function renderGlobalTableBulkBar(){
   bar.style.display = n>0 ? 'flex' : 'none';
   document.getElementById('gt-bulk-count').textContent = `${n} selecionado(s)`;
 }
-function renderGlobalTable(){
-  if(!currentUser) return;
+function currentGlobalTableList(){
   const search = document.getElementById('gt-search').value.toLowerCase();
   const sectorFilter = document.getElementById('gt-sector-filter').value;
+  const tagFilter = document.getElementById('gt-tag-filter').value;
   const onlyNew = document.getElementById('gt-only-new').checked;
-  const list = projects.filter(p=>{
+  return projects.filter(p=>{
     if(onlyNew && p.newTopic!==true) return false;
     if(search && !p.name.toLowerCase().includes(search)) return false;
     if(sectorFilter==='__none__'){
@@ -1900,6 +2019,7 @@ function renderGlobalTable(){
     }else if(sectorFilter){
       if(p.sector !== sectorFilter) return false;
     }
+    if(tagFilter && !projectHasTag(p, tagFilter)) return false;
     if(gtStatusFilter==='late'){
       if(!(!isProjectDone(p) && p.endDate && daysDiff(p.endDate) < 0)) return false;
     }else if(gtStatusFilter==='done'){
@@ -1907,6 +2027,10 @@ function renderGlobalTable(){
     }
     return true;
   });
+}
+function renderGlobalTable(){
+  if(!currentUser) return;
+  const list = currentGlobalTableList();
   const filterLabel = gtStatusFilter==='late' ? ' atrasado(s) — clique de novo para limpar' :
                        gtStatusFilter==='done' ? ' concluído(s) — clique de novo para limpar' : ' projeto(s)';
   document.getElementById('gt-count-label').textContent = list.length + filterLabel;
@@ -1937,12 +2061,14 @@ function renderGlobalTable(){
   });
 
   const tbody = document.getElementById('global-table-body');
+  const draftHtml = draftRowActive ? draftRowHtml() : '';
   if(list.length===0){
-    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:40px;color:var(--ink-soft)">Nenhum projeto encontrado.</td></tr>`;
+    tbody.innerHTML = draftHtml + `<tr><td colspan="13" style="text-align:center;padding:40px;color:var(--ink-soft)">Nenhum projeto encontrado.</td></tr>`;
+    wireDraftRow();
     renderGlobalTableBulkBar();
     return;
   }
-  tbody.innerHTML = list.map(p=>{
+  tbody.innerHTML = draftHtml + list.map(p=>{
     const phaseName = phasesForSector(p.sector).find(ph=>ph.id===p.phase)?.name || '—';
     const secName = sectors.find(s=>s.id===p.sector)?.name || 'Sem setor';
     const st = statusOf(p);
@@ -1952,6 +2078,7 @@ function renderGlobalTable(){
     return `<tr data-id="${p.id}">
       <td><input type="checkbox" class="gt-select" data-id="${p.id}" ${checked}></td>
       <td style="cursor:pointer"><strong>${newBadge}${p.type==='POP'?'<span class="pop-badge">POP</span> ':''}${escapeHtml(p.name)}</strong></td>
+      <td>${resolveTags(p).length>0 ? resolveTags(p).map(t=>`<span class="tag-custom" style="background:${t.color}">${escapeHtml(t.text)}</span>`).join(' ') : '—'}</td>
       <td>${escapeHtml(secName)}</td>
       <td>${p.sectorRaw ? `<span style="font-size:11px;color:var(--ink-soft)">${escapeHtml(p.sectorRaw)}</span>` : '—'}</td>
       <td>${escapeHtml(p.area||'—')}</td>
@@ -1964,6 +2091,7 @@ function renderGlobalTable(){
       <td><span class="pill" style="border-color:${stColor};color:${stColor}">${st.label}</span></td>
     </tr>`;
   }).join('');
+  wireDraftRow();
   tbody.querySelectorAll('tr[data-id] td:not(:first-child)').forEach(td=>{
     td.addEventListener('click', ()=>{
       const id = td.closest('tr').dataset.id;
@@ -1985,24 +2113,7 @@ function renderGlobalTable(){
   renderGlobalTableBulkBar();
 }
 document.getElementById('gt-select-all').addEventListener('change', e=>{
-  const search = document.getElementById('gt-search').value.toLowerCase();
-  const sectorFilter = document.getElementById('gt-sector-filter').value;
-  const onlyNew = document.getElementById('gt-only-new').checked;
-  const list = projects.filter(p=>{
-    if(onlyNew && p.newTopic!==true) return false;
-    if(search && !p.name.toLowerCase().includes(search)) return false;
-    if(sectorFilter==='__none__'){
-      if(p.sector && sectors.some(s=>s.id===p.sector)) return false;
-    }else if(sectorFilter){
-      if(p.sector !== sectorFilter) return false;
-    }
-    if(gtStatusFilter==='late'){
-      if(!(!isProjectDone(p) && p.endDate && daysDiff(p.endDate) < 0)) return false;
-    }else if(gtStatusFilter==='done'){
-      if(!isProjectDone(p)) return false;
-    }
-    return true;
-  });
+  const list = currentGlobalTableList();
   if(e.target.checked){ list.forEach(p=>selectedGlobalIds.add(p.id)); }
   else{ list.forEach(p=>selectedGlobalIds.delete(p.id)); }
   renderGlobalTable();
@@ -2051,9 +2162,8 @@ async function savePhases(){
 }
 async function saveProject(id, data){
   try{
-    if(id){ await db.collection('projects').doc(id).update(data); }
-    else{ await db.collection('projects').add(data); }
-    return true;
+    if(id){ await db.collection('projects').doc(id).update(data); return true; }
+    else{ const ref = await db.collection('projects').add(data); return ref.id; }
   }catch(e){ console.error(e); toast('Erro ao salvar projeto (verifique permissões)'); return false; }
 }
 async function deleteProject(id){
@@ -2687,6 +2797,12 @@ function renderSectorPicker(selectedId){
   sel.innerHTML = sectors.map(s=>`<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
   sel.value = selectedId || (currentSector && currentSector.id!=='__none__' ? currentSector.id : (sectors[0]?.id||''));
 }
+document.getElementById('p-sector').addEventListener('change', e=>{
+  const sectorPhases = phasesForSector(e.target.value);
+  const sel = document.getElementById('p-phase');
+  sel.innerHTML = sectorPhases.map(ph=>`<option value="${ph.id}">${escapeHtml(ph.name)}</option>`).join('');
+  updateProgressSliderColor();
+});
 function openNew(phaseId){
   document.getElementById('modal-title').textContent = 'Novo projeto';
   document.getElementById('p-id').value = '';
@@ -2715,6 +2831,10 @@ function openNew(phaseId){
   renderImagePreview();
   document.getElementById('field-sector-picker').style.display = currentUser.isAdmin ? 'block' : 'none';
   renderSectorPicker(currentSector && currentSector.id!=='__none__' ? currentSector.id : null);
+  if(currentUser.isAdmin){
+    const sectorPhases = phasesForSector(document.getElementById('p-sector').value);
+    document.getElementById('p-phase').innerHTML = sectorPhases.map(ph=>`<option value="${ph.id}">${escapeHtml(ph.name)}</option>`).join('');
+  }
   if(currentUser.isAdmin){
     document.getElementById('p-manager-picker').value = '';
     document.getElementById('p-manager').value = '';
@@ -3327,9 +3447,9 @@ function renderDashboard(){
   document.getElementById('dash-breakdown').innerHTML = html;
 }
 
-document.getElementById('btn-export').addEventListener('click', ()=>{
-  if(projects.length===0){ toast('Nenhum projeto para exportar'); return; }
-  const rows = projects.map(p=>{
+function exportProjectsToExcel(list, filename){
+  if(!list || list.length===0){ toast('Nenhum projeto para exportar'); return; }
+  const rows = list.map(p=>{
     const phaseName = phasesForSector(p.sector).find(ph=>ph.id===p.phase)?.name || '';
     const secName = sectors.find(s=>s.id===p.sector)?.name || 'Sem setor';
     const st = statusOf(p);
@@ -3355,8 +3475,11 @@ document.getElementById('btn-export').addEventListener('click', ()=>{
   ];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Projetos');
-  XLSX.writeFile(wb, 'projetos.xlsx');
+  XLSX.writeFile(wb, filename || 'projetos.xlsx');
   toast('Planilha exportada — abra direto no Excel');
+}
+document.getElementById('btn-export').addEventListener('click', ()=>{
+  exportProjectsToExcel(projects, 'projetos.xlsx');
 });
 
 // ---- Importar planilha (Excel/CSV) ----
