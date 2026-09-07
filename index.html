@@ -22,9 +22,9 @@
     --primary:#5B5BF6;
     --primary-hover:#4747E0;
     --teal:#0EA5A5;
-    --amber:#F5A524;
-    --brick:#F0473C;
-    --sage:#2FBF71;
+    --amber:#FFB300;
+    --brick:#FF3B30;
+    --sage:#00C853;
     --font-display:'Space Grotesk',sans-serif;
     --font-body:'Inter',sans-serif;
     --font-mono:'IBM Plex Mono',monospace;
@@ -221,6 +221,11 @@
   .cal-btn:hover{opacity:1;background:var(--paper);}
 
   /* TABLE */
+  .bulk-bar{
+    display:flex;align-items:center;gap:10px;background:var(--card-bg);border:1px solid var(--primary);
+    border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:var(--ink);
+  }
+  .bulk-bar #bulk-count{font-weight:600;margin-right:4px;}
   .table-wrap{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow-sm);}
   table{width:100%;border-collapse:collapse;font-size:13px;}
   th{
@@ -500,7 +505,7 @@
     <div class="header-row header-row-bottom" id="workspace-actions" style="display:none">
       <button class="btn btn-ghost" id="btn-phases">⚙️ Etapas deste setor</button>
       <button class="btn btn-ghost" id="btn-theme">Cores</button>
-      <button class="btn btn-ghost" id="btn-export">Exportar CSV</button>
+      <button class="btn btn-ghost" id="btn-export">📊 Exportar planilha</button>
       <button class="btn btn-ghost" id="btn-sector-report">📄 Relatório do setor (PDF)</button>
       <button class="btn btn-primary" id="btn-new">+ Novo projeto</button>
     </div>
@@ -508,14 +513,13 @@
 
   <div id="view-sectors">
     <div class="gdash-toggle-row">
+      <button class="btn btn-ghost" id="btn-global-kanban">🗂️ Kanban geral</button>
+      <button class="btn btn-ghost" id="btn-global-table">📋 Tabela geral</button>
       <button class="btn btn-ghost" id="btn-toggle-gdash">📊 Dashboard geral</button>
       <button class="btn btn-ghost" id="btn-global-report">📄 Relatório geral (PDF)</button>
-      <button class="btn btn-ghost" id="btn-global-pops">📋 Novos tópicos</button>
     </div>
     <div class="gdash-toggle-row" id="admin-tools-row" style="display:none">
       <button class="btn btn-ghost" id="btn-managers-open">⚙️ Gestores</button>
-      <button class="btn btn-ghost" id="btn-import">⚙️ Importar planilha</button>
-      <input type="file" id="import-file-input" accept=".csv,.xlsx,.xls" style="display:none">
     </div>
     <div id="gdash-panel" style="display:none">
       <div class="dash-period-bar">
@@ -533,18 +537,50 @@
     <div class="sector-grid" id="sector-grid"></div>
   </div>
 
-  <div id="view-global-pops" style="display:none">
-    <div class="stats-row" id="pops-stats-row"></div>
+  <div id="view-global-kanban" style="display:none">
+    <div class="filters">
+      <input type="text" id="gk-search" placeholder="Buscar projeto...">
+      <span class="count" id="gk-count-label"></span>
+    </div>
+    <div class="board" id="global-board"></div>
+  </div>
+
+  <div id="view-global-table" style="display:none">
+    <div class="gdash-toggle-row" id="table-admin-tools-row" style="display:none">
+      <button class="btn btn-primary" id="btn-import">⬆️ Importar planilha</button>
+      <input type="file" id="import-file-input" accept=".csv,.xlsx,.xls" style="display:none">
+    </div>
+    <div class="stats-row" id="gt-stats-row"></div>
+    <div class="bulk-bar" id="gt-bulk-bar" style="display:none">
+      <span id="gt-bulk-count">0 selecionado(s)</span>
+      <span>Enviar para o setor:</span>
+      <select id="gt-bulk-sector"></select>
+      <button class="btn btn-primary" id="gt-bulk-send">Enviar selecionados</button>
+      <button class="btn btn-ghost" id="gt-bulk-review">Marcar como revisado</button>
+      <button class="btn btn-ghost" id="gt-bulk-clear">Cancelar seleção</button>
+    </div>
+    <div class="filters">
+      <select id="gt-sector-filter"><option value="">Todos os setores</option></select>
+      <input type="text" id="gt-search" placeholder="Buscar projeto...">
+      <label class="check-inline" style="white-space:nowrap"><input type="checkbox" id="gt-only-new"> 🆕 Só pendentes de revisão</label>
+      <span class="count" id="gt-count-label"></span>
+    </div>
     <div class="table-wrap">
       <table>
         <thead>
           <tr>
-            <th>Tópico</th><th>Setor</th><th>Área</th><th>Gestor</th><th>Etapa</th>
-            <th>Prioridade</th><th>Progresso</th><th>Início</th><th>Fim</th><th>Status</th><th></th>
+            <th style="width:32px"><input type="checkbox" id="gt-select-all"></th>
+            <th>Projeto</th><th>Setor</th><th>Setor sugerido</th><th>Área</th><th>Gestor</th><th>Etapa</th>
+            <th>Prioridade</th><th>Progresso</th><th>Início</th><th>Fim</th><th>Status</th>
           </tr>
         </thead>
-        <tbody id="pops-table-body"></tbody>
+        <tbody id="global-table-body"></tbody>
       </table>
+    </div>
+  </div>
+
+
+  </div>
     </div>
   </div>
 
@@ -586,10 +622,17 @@
 
     <div id="view-kanban"><div class="board" id="board"></div></div>
     <div id="view-table" style="display:none">
+      <div class="bulk-bar" id="bulk-bar" style="display:none">
+        <span id="bulk-count">0 selecionado(s)</span>
+        <button class="btn btn-ghost" id="bulk-mark-pop">Marcar como POP</button>
+        <button class="btn btn-ghost" id="bulk-mark-project">Marcar como Projeto</button>
+        <button class="btn btn-ghost" id="bulk-clear">Cancelar seleção</button>
+      </div>
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
+              <th style="width:32px"><input type="checkbox" id="table-select-all"></th>
               <th data-k="name">Projeto</th>
               <th>Tags</th>
               <th data-k="area">Área</th>
@@ -722,6 +765,7 @@
       <div class="pin-options">
         <label class="check-inline"><input type="checkbox" id="p-pinned"> 📌 Fixar este card no topo da coluna</label>
         <label class="check-inline"><input type="checkbox" id="p-count-stats" checked> 📊 Contabilizar este card nas estatísticas</label>
+        <label class="check-inline"><input type="checkbox" id="p-new-topic"> 🆕 Marcar como novo tópico (aparece na lista de revisão)</label>
       </div>
     </div>
     <div class="field"><label>Observações</label><textarea id="p-notes" placeholder="Detalhes, links, próximos passos..."></textarea></div>
@@ -1098,7 +1142,7 @@ const DEFAULT_PHASES = [
 ];
 const PRIO_COLOR = {Baixa:'var(--sage)', 'Média':'var(--teal)', Alta:'var(--amber)', Urgente:'var(--brick)'};
 
-const DEFAULT_THEME = {paper:'#EEEFF7', card:'#FBF9F4', ink:'#1F3552', teal:'#3E7C74', amber:'#C97D2E', brick:'#B2503F', sage:'#6B8F71'};
+const DEFAULT_THEME = {paper:'#EEEFF7', card:'#FBF9F4', ink:'#1F3552', teal:'#3E7C74', amber:'#FFB300', brick:'#FF3B30', sage:'#00C853'};
 const THEME_PRESETS = [
   {name:'Blueprint (padrão)', ...DEFAULT_THEME},
   {name:'Verde floresta', paper:'#EAEEE6', card:'#F8FAF5', ink:'#22402E', teal:'#3E7C74', amber:'#B8863B', brick:'#A6473A', sage:'#6B8F71'},
@@ -1236,7 +1280,7 @@ function subscribeData(){
     syncCurrentPhases();
     renderPhaseSelect();
     renderAll();
-    if(document.getElementById('view-global-pops').style.display==='block') renderGlobalPops();
+    if(document.getElementById('view-global-table').style.display==='block') renderGlobalTable();
   }, err=>console.error(err));
 
   if(unsubscribeManagers) unsubscribeManagers();
@@ -1250,6 +1294,11 @@ function subscribeData(){
     sectors = doc.exists && doc.data().list ? doc.data().list : [];
     renderSectorGrid();
     renderGlobalDashboard();
+    if(document.getElementById('view-global-kanban').style.display==='block') renderGlobalKanban();
+    if(document.getElementById('view-global-table').style.display==='block'){
+      populateGlobalTableSectorFilter();
+      renderGlobalTable();
+    }
   }, err=>console.error(err));
 
   if(unsubscribeTags) unsubscribeTags();
@@ -1279,7 +1328,9 @@ function subscribeData(){
     renderGlobalDashboard();
     renderAll();
     if(document.getElementById('view-global-calendar').style.display==='block') globalCalendarController.render();
-    if(document.getElementById('view-global-pops').style.display==='block') renderGlobalPops();
+    if(document.getElementById('view-global-table').style.display==='block') renderGlobalTable();
+    if(document.getElementById('view-global-kanban').style.display==='block') renderGlobalKanban();
+    if(document.getElementById('view-global-table').style.display==='block') renderGlobalTable();
   }, err=>{
     console.error(err);
     toast('Erro ao carregar projetos (verifique as regras do Firestore)');
@@ -1664,9 +1715,7 @@ function enterSector(s){
   currentSector = s;
   syncCurrentPhases();
   renderPhaseSelect();
-  document.getElementById('view-sectors').style.display = 'none';
-  document.getElementById('view-global-calendar').style.display = 'none';
-  document.getElementById('view-global-pops').style.display = 'none';
+  hideAllGlobalViews();
   document.getElementById('project-workspace').style.display = 'block';
   document.getElementById('btn-back-arrow').style.display = 'inline-block';
   document.getElementById('workspace-view-toggle').style.display = 'flex';
@@ -1677,10 +1726,8 @@ function enterSector(s){
   switchView('kanban');
 }
 function backToSectorsUI(){
+  hideAllGlobalViews();
   document.getElementById('view-sectors').style.display = 'block';
-  document.getElementById('view-global-calendar').style.display = 'none';
-  document.getElementById('view-global-pops').style.display = 'none';
-  document.getElementById('project-workspace').style.display = 'none';
   document.getElementById('btn-back-arrow').style.display = 'none';
   document.getElementById('workspace-view-toggle').style.display = 'none';
   document.getElementById('workspace-actions').style.display = 'none';
@@ -1696,12 +1743,18 @@ document.getElementById('btn-back-arrow').addEventListener('click', ()=>{
   backToSectorsUI();
 });
 
+function hideAllGlobalViews(){
+  document.getElementById('view-sectors').style.display = 'none';
+  document.getElementById('project-workspace').style.display = 'none';
+  document.getElementById('view-global-calendar').style.display = 'none';
+  document.getElementById('view-global-kanban').style.display = 'none';
+  document.getElementById('view-global-table').style.display = 'none';
+}
+
 // ---- Calendário geral (todos os setores) ----
 function showGlobalCalendar(){
   currentSector = null;
-  document.getElementById('view-sectors').style.display = 'none';
-  document.getElementById('project-workspace').style.display = 'none';
-  document.getElementById('view-global-pops').style.display = 'none';
+  hideAllGlobalViews();
   document.getElementById('view-global-calendar').style.display = 'block';
   document.getElementById('btn-back-arrow').style.display = 'inline-block';
   document.getElementById('workspace-view-toggle').style.display = 'none';
@@ -1711,39 +1764,181 @@ function showGlobalCalendar(){
 }
 document.getElementById('btn-global-calendar').addEventListener('click', showGlobalCalendar);
 
-// ---- Lista geral de POPs (todos os setores) ----
-function showGlobalPops(){
+// ---- Kanban geral (colunas = setores) ----
+function showGlobalKanban(){
   currentSector = null;
-  document.getElementById('view-sectors').style.display = 'none';
-  document.getElementById('project-workspace').style.display = 'none';
-  document.getElementById('view-global-calendar').style.display = 'none';
-  document.getElementById('view-global-pops').style.display = 'block';
+  hideAllGlobalViews();
+  document.getElementById('view-global-kanban').style.display = 'block';
   document.getElementById('btn-back-arrow').style.display = 'inline-block';
   document.getElementById('workspace-view-toggle').style.display = 'none';
   document.getElementById('workspace-actions').style.display = 'none';
-  document.getElementById('header-sub').textContent = 'Novos tópicos — todos os setores';
-  renderGlobalPops();
+  document.getElementById('header-sub').textContent = 'Kanban geral — uma coluna por setor';
+  renderGlobalKanban();
 }
-document.getElementById('btn-global-pops').addEventListener('click', showGlobalPops);
+document.getElementById('btn-global-kanban').addEventListener('click', showGlobalKanban);
+document.getElementById('gk-search').addEventListener('input', renderGlobalKanban);
 
-function renderGlobalPops(){
+function renderGlobalKanban(){
   if(!currentUser) return;
-  const list = projects.filter(p=>p.type==='POP');
-  const doneCount = list.filter(p=>isProjectDone(p)).length;
-  const completionPct = list.length ? Math.round((doneCount/list.length)*100) : 0;
-  const avgProgress = list.length ? Math.round(list.reduce((s,p)=>s+(p.progress||0),0)/list.length) : 0;
-  const lateCount = list.filter(p=> !isProjectDone(p) && p.endDate && daysDiff(p.endDate) < 0).length;
+  const search = document.getElementById('gk-search').value.toLowerCase();
+  const base = projects.filter(p => !search || p.name.toLowerCase().includes(search));
+  const board = document.getElementById('global-board');
+  document.getElementById('gk-count-label').textContent = base.length + ' projeto(s)';
 
-  document.getElementById('pops-stats-row').innerHTML = `
-    <div class="stat-card"><div class="val">${list.length}</div><div class="lbl">Total de tópicos</div></div>
-    ${ringCardHtml(completionPct, 'var(--sage)', `Concluídos (${doneCount}/${list.length})`, 'done')}
-    ${ringCardHtml(avgProgress, 'var(--primary)', 'Progresso médio', 'progress')}
-    <div class="stat-card late"><div class="val">${lateCount}</div><div class="lbl">Atrasados</div></div>
+  const columns = sectors.map(s=>({id:s.id, name:s.name}));
+  const noneCount = base.filter(p=>!p.sector || !sectors.some(s=>s.id===p.sector)).length;
+  if(noneCount>0) columns.push({id:'__none__', name:'Sem setor'});
+
+  if(columns.length===0){
+    board.innerHTML = `<div class="empty" style="width:100%"><div class="big">Nenhum setor cadastrado ainda</div></div>`;
+    return;
+  }
+
+  board.innerHTML = columns.map(col=>{
+    const items = base.filter(p=>{
+      if(col.id==='__none__') return !p.sector || !sectors.some(s=>s.id===p.sector);
+      return p.sector === col.id;
+    }).sort((a,b)=>(b.pinned?1:0)-(a.pinned?1:0));
+    return `
+    <div class="column" data-sector="${col.id}">
+      <div class="column-head">
+        <span class="name">${escapeHtml(col.name)}</span>
+        <span class="n">${items.length}</span>
+      </div>
+      <div class="column-body" data-sector="${col.id}">
+        ${items.map(cardHtml).join('')}
+      </div>
+    </div>`;
+  }).join('');
+
+  board.querySelectorAll('.card').forEach(el=>{
+    el.addEventListener('dragstart', e=>{ e.dataTransfer.setData('text/plain', el.dataset.id); });
+    el.addEventListener('click', e=>{
+      if(e.target.closest('.cal-btn')) return;
+      const p = base.find(x=>x.id===el.dataset.id);
+      if(!p) return;
+      const s = sectors.find(x=>x.id===p.sector) || {id:'__none__', name:'Sem setor'};
+      enterSector(s);
+      setTimeout(()=>openEdit(p.id), 0);
+    });
+  });
+  board.querySelectorAll('.cal-btn').forEach(btn=>{
+    btn.addEventListener('click', e=>{
+      e.stopPropagation();
+      const p = base.find(x=>x.id===btn.dataset.id);
+      if(p) window.open(googleCalendarUrl(p), '_blank');
+    });
+  });
+  board.querySelectorAll('.column-body').forEach(col=>{
+    col.addEventListener('dragover', e=>{ e.preventDefault(); col.closest('.column').classList.add('dragover'); });
+    col.addEventListener('dragleave', ()=>{ col.closest('.column').classList.remove('dragover'); });
+    col.addEventListener('drop', async e=>{
+      e.preventDefault();
+      col.closest('.column').classList.remove('dragover');
+      const id = e.dataTransfer.getData('text/plain');
+      const proj = projects.find(p=>p.id===id);
+      const newSectorId = col.dataset.sector === '__none__' ? '' : col.dataset.sector;
+      if(proj && proj.sector !== newSectorId){
+        await saveProject(proj.id, {sector: newSectorId});
+        toast('Projeto movido de setor');
+      }
+    });
+  });
+}
+
+// ---- Tabela geral (todos os setores) — centro de comando: ver, importar, selecionar, enviar ----
+let selectedGlobalIds = new Set();
+let gtStatusFilter = null; // null | 'late' | 'done'
+function showGlobalTable(onlyNew){
+  currentSector = null;
+  hideAllGlobalViews();
+  document.getElementById('view-global-table').style.display = 'block';
+  document.getElementById('btn-back-arrow').style.display = 'inline-block';
+  document.getElementById('workspace-view-toggle').style.display = 'none';
+  document.getElementById('workspace-actions').style.display = 'none';
+  document.getElementById('header-sub').textContent = 'Tabela geral — todos os setores';
+  document.getElementById('table-admin-tools-row').style.display = currentUser.isAdmin ? 'flex' : 'none';
+  if(typeof onlyNew === 'boolean') document.getElementById('gt-only-new').checked = onlyNew;
+  populateGlobalTableSectorFilter();
+  selectedGlobalIds.clear();
+  gtStatusFilter = null;
+  renderGlobalTable();
+}
+document.getElementById('btn-global-table').addEventListener('click', ()=>showGlobalTable());
+document.getElementById('gt-search').addEventListener('input', renderGlobalTable);
+document.getElementById('gt-sector-filter').addEventListener('change', renderGlobalTable);
+document.getElementById('gt-only-new').addEventListener('change', renderGlobalTable);
+function populateGlobalTableSectorFilter(){
+  const sel = document.getElementById('gt-sector-filter');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">Todos os setores</option>' +
+    sectors.map(s=>`<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('') +
+    '<option value="__none__">Sem setor</option>';
+  sel.value = cur;
+  const bulkSel = document.getElementById('gt-bulk-sector');
+  const curBulk = bulkSel.value;
+  bulkSel.innerHTML = sectors.map(s=>`<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+  if(curBulk) bulkSel.value = curBulk;
+}
+function renderGlobalTableBulkBar(){
+  const bar = document.getElementById('gt-bulk-bar');
+  const n = selectedGlobalIds.size;
+  bar.style.display = n>0 ? 'flex' : 'none';
+  document.getElementById('gt-bulk-count').textContent = `${n} selecionado(s)`;
+}
+function renderGlobalTable(){
+  if(!currentUser) return;
+  const search = document.getElementById('gt-search').value.toLowerCase();
+  const sectorFilter = document.getElementById('gt-sector-filter').value;
+  const onlyNew = document.getElementById('gt-only-new').checked;
+  const list = projects.filter(p=>{
+    if(onlyNew && p.newTopic!==true) return false;
+    if(search && !p.name.toLowerCase().includes(search)) return false;
+    if(sectorFilter==='__none__'){
+      if(p.sector && sectors.some(s=>s.id===p.sector)) return false;
+    }else if(sectorFilter){
+      if(p.sector !== sectorFilter) return false;
+    }
+    if(gtStatusFilter==='late'){
+      if(!(!isProjectDone(p) && p.endDate && daysDiff(p.endDate) < 0)) return false;
+    }else if(gtStatusFilter==='done'){
+      if(!isProjectDone(p)) return false;
+    }
+    return true;
+  });
+  const filterLabel = gtStatusFilter==='late' ? ' atrasado(s) — clique de novo para limpar' :
+                       gtStatusFilter==='done' ? ' concluído(s) — clique de novo para limpar' : ' projeto(s)';
+  document.getElementById('gt-count-label').textContent = list.length + filterLabel;
+
+  const newCount = projects.filter(p=>p.newTopic===true).length;
+  const doneCount = projects.filter(p=>isProjectDone(p)).length;
+  const lateCount = projects.filter(p=> !isProjectDone(p) && p.endDate && daysDiff(p.endDate) < 0).length;
+  const totalForStats = projects.length;
+  const completionPct = totalForStats ? Math.round((doneCount/totalForStats)*100) : 0;
+  const avgProgress = totalForStats ? Math.round(projects.reduce((s,p)=>s+(p.progress||0),0)/totalForStats) : 0;
+  document.getElementById('gt-stats-row').innerHTML = `
+    <div class="stat-card"><div class="val">${totalForStats}</div><div class="lbl">Total de projetos</div></div>
+    <div class="stat-card late" id="gt-stat-new"><div class="val">${newCount}</div><div class="lbl">Pendentes de revisão</div></div>
+    <div class="stat-card done ${gtStatusFilter==='done'?'active':''}" id="gt-stat-done"><div class="val">${doneCount}</div><div class="lbl">Concluídos</div></div>
+    <div class="stat-card late ${gtStatusFilter==='late'?'active':''}" id="gt-stat-late"><div class="val">${lateCount}</div><div class="lbl">Atrasados</div></div>
   `;
+  document.getElementById('gt-stat-done').addEventListener('click', ()=>{
+    gtStatusFilter = gtStatusFilter==='done' ? null : 'done';
+    renderGlobalTable();
+  });
+  document.getElementById('gt-stat-late').addEventListener('click', ()=>{
+    gtStatusFilter = gtStatusFilter==='late' ? null : 'late';
+    renderGlobalTable();
+  });
+  document.getElementById('gt-stat-new').addEventListener('click', ()=>{
+    document.getElementById('gt-only-new').checked = !document.getElementById('gt-only-new').checked;
+    renderGlobalTable();
+  });
 
-  const tbody = document.getElementById('pops-table-body');
+  const tbody = document.getElementById('global-table-body');
   if(list.length===0){
-    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--ink-soft)">Nenhum tópico do tipo POP cadastrado ainda.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:40px;color:var(--ink-soft)">Nenhum projeto encontrado.</td></tr>`;
+    renderGlobalTableBulkBar();
     return;
   }
   tbody.innerHTML = list.map(p=>{
@@ -1751,41 +1946,89 @@ function renderGlobalPops(){
     const secName = sectors.find(s=>s.id===p.sector)?.name || 'Sem setor';
     const st = statusOf(p);
     const stColor = st.cls==='late' ? 'var(--brick)' : st.cls==='warn' ? 'var(--amber)' : st.cls==='done' ? 'var(--sage)' : 'var(--teal)';
-    return `<tr data-id="${p.id}" style="cursor:pointer">
-      <td><strong>${escapeHtml(p.name)}</strong></td>
+    const checked = selectedGlobalIds.has(p.id) ? 'checked' : '';
+    const newBadge = p.newTopic ? '<span class="pop-badge" style="background:var(--primary)" title="Pendente de revisão">🆕 Novo</span> ' : '';
+    return `<tr data-id="${p.id}">
+      <td><input type="checkbox" class="gt-select" data-id="${p.id}" ${checked}></td>
+      <td style="cursor:pointer"><strong>${newBadge}${p.type==='POP'?'<span class="pop-badge">POP</span> ':''}${escapeHtml(p.name)}</strong></td>
       <td>${escapeHtml(secName)}</td>
+      <td>${p.sectorRaw ? `<span style="font-size:11px;color:var(--ink-soft)">${escapeHtml(p.sectorRaw)}</span>` : '—'}</td>
       <td>${escapeHtml(p.area||'—')}</td>
       <td>${escapeHtml(p.manager||'—')}</td>
       <td><span class="pill" style="border-color:var(--border)">${escapeHtml(phaseName)}</span></td>
       <td><span class="pill" style="border-color:${PRIO_COLOR[p.priority]};color:${PRIO_COLOR[p.priority]}">${escapeHtml(p.priority)}</span></td>
       <td>${p.progress||0}%</td>
-      <td>${fmtDate(p.startDate)}</td>
-      <td>${fmtDate(p.endDate)}</td>
+      <td class="mono">${fmtDate(p.startDate)}</td>
+      <td class="mono">${fmtDate(p.endDate)}</td>
       <td><span class="pill" style="border-color:${stColor};color:${stColor}">${st.label}</span></td>
-      <td><button type="button" class="icon-btn" data-convert="${p.id}" title="Converter em Projeto" style="white-space:nowrap">→ Projeto</button></td>
     </tr>`;
   }).join('');
-  tbody.querySelectorAll('tr[data-id]').forEach(tr=>{
-    tr.addEventListener('click', e=>{
-      if(e.target.closest('[data-convert]')) return;
-      const p = list.find(x=>x.id===tr.dataset.id);
+  tbody.querySelectorAll('tr[data-id] td:not(:first-child)').forEach(td=>{
+    td.addEventListener('click', ()=>{
+      const id = td.closest('tr').dataset.id;
+      const p = list.find(x=>x.id===id);
       if(!p) return;
       const s = sectors.find(x=>x.id===p.sector) || {id:'__none__', name:'Sem setor'};
       enterSector(s);
       setTimeout(()=>openEdit(p.id), 0);
     });
   });
-  tbody.querySelectorAll('[data-convert]').forEach(btn=>{
-    btn.addEventListener('click', async e=>{
-      e.stopPropagation();
-      const p = list.find(x=>x.id===btn.dataset.convert);
-      if(!p) return;
-      if(!confirm(`Converter "${p.name}" em Projeto? Ele deixa de aparecer nesta lista de tópicos.`)) return;
-      await saveProject(p.id, {type:'Projeto'});
-      toast('Convertido em Projeto');
+  tbody.querySelectorAll('.gt-select').forEach(cb=>{
+    cb.addEventListener('click', e=>e.stopPropagation());
+    cb.addEventListener('change', ()=>{
+      if(cb.checked) selectedGlobalIds.add(cb.dataset.id);
+      else selectedGlobalIds.delete(cb.dataset.id);
+      renderGlobalTableBulkBar();
     });
   });
+  renderGlobalTableBulkBar();
 }
+document.getElementById('gt-select-all').addEventListener('change', e=>{
+  const search = document.getElementById('gt-search').value.toLowerCase();
+  const sectorFilter = document.getElementById('gt-sector-filter').value;
+  const onlyNew = document.getElementById('gt-only-new').checked;
+  const list = projects.filter(p=>{
+    if(onlyNew && p.newTopic!==true) return false;
+    if(search && !p.name.toLowerCase().includes(search)) return false;
+    if(sectorFilter==='__none__'){
+      if(p.sector && sectors.some(s=>s.id===p.sector)) return false;
+    }else if(sectorFilter){
+      if(p.sector !== sectorFilter) return false;
+    }
+    if(gtStatusFilter==='late'){
+      if(!(!isProjectDone(p) && p.endDate && daysDiff(p.endDate) < 0)) return false;
+    }else if(gtStatusFilter==='done'){
+      if(!isProjectDone(p)) return false;
+    }
+    return true;
+  });
+  if(e.target.checked){ list.forEach(p=>selectedGlobalIds.add(p.id)); }
+  else{ list.forEach(p=>selectedGlobalIds.delete(p.id)); }
+  renderGlobalTable();
+});
+document.getElementById('gt-bulk-clear').addEventListener('click', ()=>{
+  selectedGlobalIds.clear();
+  renderGlobalTable();
+});
+document.getElementById('gt-bulk-send').addEventListener('click', async ()=>{
+  const sectorId = document.getElementById('gt-bulk-sector').value;
+  const sectorName = sectors.find(s=>s.id===sectorId)?.name || '';
+  if(!sectorId){ toast('Escolha um setor de destino'); return; }
+  if(!confirm(`Enviar ${selectedGlobalIds.size} item(ns) selecionado(s) para o setor "${sectorName}"?`)) return;
+  for(const id of selectedGlobalIds){
+    await saveProject(id, {sector: sectorId, sectorRaw: '', newTopic: false});
+  }
+  selectedGlobalIds.clear();
+  toast(`Itens enviados para ${sectorName}`);
+});
+document.getElementById('gt-bulk-review').addEventListener('click', async ()=>{
+  if(!confirm(`Marcar ${selectedGlobalIds.size} item(ns) selecionado(s) como revisado(s)? Isso só remove o selo "Novo", mantém o setor atual.`)) return;
+  for(const id of selectedGlobalIds){
+    await saveProject(id, {newTopic: false});
+  }
+  selectedGlobalIds.clear();
+  toast('Itens marcados como revisados');
+});
 
 const globalCalendarController = makeCalendarController({
   getProjects: ()=>projects,
@@ -2117,6 +2360,13 @@ function cardHtml(p){
   </div>`;
 }
 
+let selectedProjectIds = new Set();
+function renderBulkBar(){
+  const bar = document.getElementById('bulk-bar');
+  const n = selectedProjectIds.size;
+  bar.style.display = n>0 ? 'flex' : 'none';
+  document.getElementById('bulk-count').textContent = `${n} selecionado(s)`;
+}
 function renderTable(){
   const tbody = document.getElementById('table-body');
   let filtered = getFiltered();
@@ -2130,15 +2380,18 @@ function renderTable(){
     });
   }
   if(filtered.length===0){
-    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--ink-soft)">Nenhum projeto encontrado.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--ink-soft)">Nenhum projeto encontrado.</td></tr>`;
+    renderBulkBar();
     return;
   }
   tbody.innerHTML = filtered.map(p=>{
     const st = statusOf(p);
     const phaseName = phases.find(ph=>ph.id===p.phase)?.name || '—';
     const stColor = st.cls==='late' ? 'var(--brick)' : st.cls==='done' ? 'var(--sage)' : 'var(--teal)';
-    return `<tr data-id="${p.id}" style="cursor:pointer">
-      <td><strong>${p.type==='POP'?'<span class="pop-badge">POP</span> ':''}${escapeHtml(p.name)}</strong></td>
+    const checked = selectedProjectIds.has(p.id) ? 'checked' : '';
+    return `<tr data-id="${p.id}">
+      <td><input type="checkbox" class="row-select" data-id="${p.id}" ${checked}></td>
+      <td style="cursor:pointer"><strong>${p.type==='POP'?'<span class="pop-badge">POP</span> ':''}${escapeHtml(p.name)}</strong></td>
       <td>${resolveTags(p).length>0 ? resolveTags(p).map(t=>`<span class="tag-custom" style="background:${t.color}">${escapeHtml(t.text)}</span>`).join(' ') : '—'}</td>
       <td>${escapeHtml(p.area||'—')}</td>
       <td>${escapeHtml(p.manager||'—')}</td>
@@ -2155,10 +2408,41 @@ function renderTable(){
       <td><span class="pill" style="border-color:${stColor};color:${stColor}">${st.label}</span></td>
     </tr>`;
   }).join('');
-  tbody.querySelectorAll('tr').forEach(tr=>{
-    tr.addEventListener('click', ()=>openEdit(tr.dataset.id));
+  tbody.querySelectorAll('tr[data-id] td:not(:first-child)').forEach(td=>{
+    td.addEventListener('click', ()=>openEdit(td.closest('tr').dataset.id));
   });
+  tbody.querySelectorAll('.row-select').forEach(cb=>{
+    cb.addEventListener('click', e=>e.stopPropagation());
+    cb.addEventListener('change', ()=>{
+      if(cb.checked) selectedProjectIds.add(cb.dataset.id);
+      else selectedProjectIds.delete(cb.dataset.id);
+      renderBulkBar();
+    });
+  });
+  renderBulkBar();
 }
+document.getElementById('table-select-all').addEventListener('change', e=>{
+  const filtered = getFiltered();
+  if(e.target.checked){ filtered.forEach(p=>selectedProjectIds.add(p.id)); }
+  else{ filtered.forEach(p=>selectedProjectIds.delete(p.id)); }
+  renderTable();
+});
+document.getElementById('bulk-clear').addEventListener('click', ()=>{
+  selectedProjectIds.clear();
+  renderTable();
+});
+document.getElementById('bulk-mark-pop').addEventListener('click', async ()=>{
+  if(!confirm(`Marcar ${selectedProjectIds.size} item(ns) selecionado(s) como POP?`)) return;
+  for(const id of selectedProjectIds){ await saveProject(id, {type:'POP'}); }
+  selectedProjectIds.clear();
+  toast('Itens marcados como POP');
+});
+document.getElementById('bulk-mark-project').addEventListener('click', async ()=>{
+  if(!confirm(`Marcar ${selectedProjectIds.size} item(ns) selecionado(s) como Projeto?`)) return;
+  for(const id of selectedProjectIds){ await saveProject(id, {type:'Projeto'}); }
+  selectedProjectIds.clear();
+  toast('Itens marcados como Projeto');
+});
 
 // ---- Modal projeto ----
 const modalProject = document.getElementById('modal-project');
@@ -2416,6 +2700,7 @@ function openNew(phaseId){
   document.getElementById('p-notes').value = '';
   document.getElementById('p-pinned').checked = false;
   document.getElementById('p-count-stats').checked = true;
+  document.getElementById('p-new-topic').checked = false;
   document.getElementById('p-progress').value = 0;
   document.getElementById('p-progress-label').textContent = '0%';
   document.getElementById('p-progress').disabled = false;
@@ -2456,6 +2741,7 @@ function openEdit(id){
   document.getElementById('p-notes').value = p.notes||'';
   document.getElementById('p-pinned').checked = !!p.pinned;
   document.getElementById('p-count-stats').checked = p.countInStats !== false;
+  document.getElementById('p-new-topic').checked = !!p.newTopic;
   document.getElementById('p-progress').value = p.progress||0;
   document.getElementById('p-progress-label').textContent = (p.progress||0)+'%';
   document.getElementById('p-manager-email').value = p.managerEmail||'';
@@ -2507,6 +2793,7 @@ document.getElementById('btn-save').addEventListener('click', async ()=>{
     image: currentImage,
     pinned: document.getElementById('p-pinned').checked,
     countInStats: document.getElementById('p-count-stats').checked,
+    newTopic: document.getElementById('p-new-topic').checked,
     notes: document.getElementById('p-notes').value.trim()
   };
   if(sectorValue !== undefined) data.sector = sectorValue;
@@ -2742,6 +3029,7 @@ modalPhases.addEventListener('click', e=>{ if(e.target===modalPhases) modalPhase
 function switchView(view){
   currentView = view;
   statusFilter = null;
+  selectedProjectIds.clear();
   ['kanban','table','dashboard','calendar'].forEach(v=>{
     document.getElementById('tab-'+v).classList.toggle('active', v===view);
     document.getElementById('view-'+v).style.display = (v===view) ? 'block' : 'none';
@@ -3040,21 +3328,34 @@ function renderDashboard(){
 
 document.getElementById('btn-export').addEventListener('click', ()=>{
   if(projects.length===0){ toast('Nenhum projeto para exportar'); return; }
-  const headers = ['Nome','Área','Gestor','Etapa','Prioridade','Progresso (%)','Data início','Data fim','Status','Observações'];
   const rows = projects.map(p=>{
     const phaseName = phasesForSector(p.sector).find(ph=>ph.id===p.phase)?.name || '';
+    const secName = sectors.find(s=>s.id===p.sector)?.name || 'Sem setor';
     const st = statusOf(p);
-    return [p.name,p.area,p.manager,phaseName,p.priority,p.progress||0,p.startDate,p.endDate,st.label,p.notes]
-      .map(v=>`"${String(v||'').replace(/"/g,'""')}"`).join(',');
+    return {
+      'Nome': p.name || '',
+      'Tipo': p.type || 'Projeto',
+      'Setor': secName,
+      'Área': p.area || '',
+      'Gestor': p.manager || '',
+      'Etapa': phaseName,
+      'Prioridade': p.priority || '',
+      'Progresso (%)': p.progress || 0,
+      'Data início': p.startDate ? fmtDate(p.startDate) : '',
+      'Data fim': p.endDate ? fmtDate(p.endDate) : '',
+      'Status': st.label,
+      'Observações': p.notes || ''
+    };
   });
-  const csv = [headers.join(','), ...rows].join('\n');
-  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8;'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'projetos.csv';
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  toast('CSV exportado — importe no Google Sheets em Arquivo > Importar');
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [
+    {wch:28},{wch:10},{wch:16},{wch:16},{wch:16},{wch:16},
+    {wch:12},{wch:14},{wch:12},{wch:12},{wch:16},{wch:32}
+  ];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Projetos');
+  XLSX.writeFile(wb, 'projetos.xlsx');
+  toast('Planilha exportada — abra direto no Excel');
 });
 
 // ---- Importar planilha (Excel/CSV) ----
@@ -3153,6 +3454,9 @@ function rowsToProjects(rows, forceType){
       checklist: [],
       image: '',
       sector: resolvedSectorId,
+      sectorRaw: matchedSector ? '' : String(sectorRaw||'').trim(),
+      newTopic: true,
+      importedAt: Date.now(),
       notes: String(pickField(row, ['observacoes','observações','notas','descricao','descrição'])).trim()
     };
   }).filter(p=>p.name);
