@@ -200,7 +200,7 @@
     cursor:grab;position:relative;box-shadow:var(--shadow-sm);transition:all .15s ease;
   }
   .card:hover{box-shadow:var(--shadow-md);transform:translateY(-1px);}
-  .card-pinned{border-color:var(--primary);background:linear-gradient(180deg, rgba(91,91,246,.06), var(--card-bg) 40%);}
+  .card-pinned{border-color:#FFD79E;background:linear-gradient(180deg, rgba(255,215,158,.28), var(--card-bg) 40%);}
   .card-pop{border-left:3px solid var(--teal);}
   .pop-badge{font-family:var(--font-mono);font-size:9px;font-weight:700;background:var(--teal);color:#fff;padding:1px 6px;border-radius:20px;margin-left:3px;}
   .card:active{cursor:grabbing;}
@@ -528,20 +528,21 @@
     <div class="gdash-toggle-row" id="admin-tools-row" style="display:none">
       <button class="btn btn-ghost" id="btn-managers-open">⚙️ Gestores</button>
     </div>
-    <div id="gdash-panel" style="display:none">
-      <div class="dash-period-bar">
-        <div class="dash-presets">
-          <button class="btn btn-ghost" id="gdash-preset-week">Esta semana</button>
-          <button class="btn btn-ghost" id="gdash-preset-month">Este mês</button>
-          <button class="btn btn-ghost active" id="gdash-preset-all">Todos os projetos</button>
-        </div>
-      </div>
-      <div class="stats-row" id="gdash-stats-row"></div>
-      <div class="dash-breakdown" id="gdash-breakdown"></div>
-    </div>
 
     <div class="sector-section-title">Setores</div>
     <div class="sector-grid" id="sector-grid"></div>
+  </div>
+
+  <div id="view-global-dashboard" style="display:none">
+    <div class="dash-period-bar">
+      <div class="dash-presets">
+        <button class="btn btn-ghost" id="gdash-preset-week">Esta semana</button>
+        <button class="btn btn-ghost" id="gdash-preset-month">Este mês</button>
+        <button class="btn btn-ghost active" id="gdash-preset-all">Todos os projetos</button>
+      </div>
+    </div>
+    <div class="stats-row" id="gdash-stats-row"></div>
+    <div class="dash-breakdown" id="gdash-breakdown"></div>
   </div>
 
   <div id="view-global-kanban" style="display:none">
@@ -586,11 +587,6 @@
         </thead>
         <tbody id="global-table-body"></tbody>
       </table>
-    </div>
-  </div>
-
-
-  </div>
     </div>
   </div>
 
@@ -1369,14 +1365,18 @@ function projectsForSector(sectorId){
   }
   return projects.filter(p => p.sector === sectorId);
 }
-// ---- Dashboard geral (tela de Setores) ----
-document.getElementById('btn-toggle-gdash').addEventListener('click', ()=>{
-  const panel = document.getElementById('gdash-panel');
-  const willShow = panel.style.display === 'none';
-  panel.style.display = willShow ? 'block' : 'none';
-  document.getElementById('btn-toggle-gdash').textContent = willShow ? '📊 Ocultar Dashboard geral' : '📊 Dashboard geral';
-  if(willShow) renderGlobalDashboard();
-});
+// ---- Dashboard geral (tela própria) ----
+function showGlobalDashboard(){
+  currentSector = null;
+  hideAllGlobalViews();
+  document.getElementById('view-global-dashboard').style.display = 'block';
+  document.getElementById('btn-back-arrow').style.display = 'inline-block';
+  document.getElementById('workspace-view-toggle').style.display = 'none';
+  document.getElementById('workspace-actions').style.display = 'none';
+  document.getElementById('header-sub').textContent = 'Dashboard geral — todos os setores';
+  renderGlobalDashboard();
+}
+document.getElementById('btn-toggle-gdash').addEventListener('click', showGlobalDashboard);
 let gdashStart = '', gdashEnd = '';
 function setGdashPreset(p){
   const today = new Date();
@@ -1762,6 +1762,7 @@ function hideAllGlobalViews(){
   document.getElementById('view-sectors').style.display = 'none';
   document.getElementById('project-workspace').style.display = 'none';
   document.getElementById('view-global-calendar').style.display = 'none';
+  document.getElementById('view-global-dashboard').style.display = 'none';
   document.getElementById('view-global-kanban').style.display = 'none';
   document.getElementById('view-global-table').style.display = 'none';
 }
