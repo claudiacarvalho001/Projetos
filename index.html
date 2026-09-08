@@ -397,6 +397,28 @@
 
   /* SETORES */
   .sector-section-title{font-family:var(--font-display);font-weight:600;font-size:15px;margin:28px 0 4px;color:var(--ink);}
+  .sectors-toolbar-card{
+    background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);
+    box-shadow:var(--shadow-sm);padding:16px 18px;margin-bottom:24px;
+  }
+  .sectors-toolbar-card .gdash-toggle-row{margin-bottom:0;}
+  .sectors-toolbar-card .gdash-toggle-row + .gdash-toggle-row{margin-top:12px;padding-top:12px;border-top:1px solid var(--paper-line);}
+  .global-nav-row{
+    display:flex;align-items:center;gap:26px;margin-bottom:24px;flex-wrap:wrap;padding:0 2px;
+  }
+  .global-nav-row button{
+    font-family:var(--font-mono);font-weight:600;font-size:11.5px;letter-spacing:.03em;text-transform:uppercase;
+    background:none;border:none;color:var(--ink-soft);cursor:pointer;padding:4px 0;white-space:nowrap;
+    transition:color .15s ease;
+  }
+  .global-nav-row button:hover{color:var(--ink);}
+  .global-nav-row .push-right{margin-left:auto;}
+  .global-nav-row .btn-primary{
+    background:var(--primary);border:1px solid var(--primary);color:#fff;
+    padding:9px 15px;border-radius:9px;text-transform:none;font-family:var(--font-body);font-size:13.5px;font-weight:600;
+  }
+  .global-nav-row .btn-primary:hover{background:var(--primary-hover);border-color:var(--primary-hover);color:#fff;}
+
   .gdash-toggle-row{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;}
   .sector-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;margin-top:8px;}
   .sector-card{
@@ -500,8 +522,6 @@
             <div id="bell-list"></div>
           </div>
         </div>
-        <button class="btn btn-ghost" id="btn-history" style="display:none">🕒 Histórico</button>
-        <button class="btn btn-ghost" id="btn-global-calendar">📅 Calendário geral</button>
         <div class="view-toggle" id="workspace-view-toggle" style="display:none">
           <button id="tab-kanban" class="active">KANBAN</button>
           <button id="tab-table">TABELA</button>
@@ -511,24 +531,24 @@
         <button class="btn btn-ghost" id="btn-logout">Sair</button>
       </div>
     </div>
-    <div class="header-row header-row-bottom" id="workspace-actions" style="display:none">
-      <button class="btn btn-ghost" id="btn-phases">⚙️ Etapas deste setor</button>
-      <button class="btn btn-ghost" id="btn-theme">Cores</button>
-      <button class="btn btn-ghost" id="btn-export">📊 Exportar planilha</button>
-      <button class="btn btn-ghost" id="btn-sector-report">📄 Relatório do setor (PDF)</button>
-      <button class="btn btn-primary" id="btn-new">+ Novo projeto</button>
+    <div class="header-row header-row-bottom global-nav-row" id="workspace-actions" style="display:none;margin-bottom:0">
+      <button id="btn-phases">Etapas deste setor</button>
+      <button id="btn-theme">Cores</button>
+      <button id="btn-export">Exportar planilha</button>
+      <button id="btn-sector-report">Relatório do setor (PDF)</button>
+      <button class="btn btn-primary push-right" id="btn-new">+ Novo projeto</button>
     </div>
   </header>
 
   <div id="view-sectors">
-    <div class="gdash-toggle-row">
-      <button class="btn btn-ghost" id="btn-global-kanban">🗂️ Kanban geral</button>
-      <button class="btn btn-ghost" id="btn-global-table">📋 Tabela geral</button>
-      <button class="btn btn-ghost" id="btn-toggle-gdash">📊 Dashboard geral</button>
-      <button class="btn btn-ghost" id="btn-global-report">📄 Relatório geral (PDF)</button>
-    </div>
-    <div class="gdash-toggle-row" id="admin-tools-row" style="display:none">
-      <button class="btn btn-ghost" id="btn-managers-open">⚙️ Gestores</button>
+    <div class="global-nav-row">
+      <button id="btn-global-kanban">Kanban geral</button>
+      <button id="btn-global-table">Tabela geral</button>
+      <button id="btn-toggle-gdash">Dashboard geral</button>
+      <button id="btn-global-calendar">Calendário geral</button>
+      <button id="btn-global-report">Relatório geral (PDF)</button>
+      <button id="btn-managers-open" style="display:none">Gestores</button>
+      <button id="btn-history" class="push-right" style="display:none">Histórico</button>
     </div>
 
     <div class="sector-section-title">Setores</div>
@@ -556,11 +576,13 @@
   </div>
 
   <div id="view-global-table" style="display:none">
-    <div class="gdash-toggle-row" id="table-admin-tools-row">
-      <button class="btn btn-primary" id="btn-global-new" style="display:none">+ Novo projeto</button>
-      <button class="btn btn-ghost" id="btn-import" style="display:none">Importar</button>
-      <button class="btn btn-ghost" id="btn-global-export">Exportar</button>
-      <input type="file" id="import-file-input" accept=".csv,.xlsx,.xls" style="display:none">
+    <div class="sectors-toolbar-card">
+      <div class="gdash-toggle-row" id="table-admin-tools-row">
+        <button class="btn btn-primary" id="btn-global-new" style="display:none">+ Novo projeto</button>
+        <button class="btn btn-ghost" id="btn-import" style="display:none">Importar</button>
+        <button class="btn btn-ghost" id="btn-global-export">Exportar</button>
+        <input type="file" id="import-file-input" accept=".csv,.xlsx,.xls" style="display:none">
+      </div>
     </div>
     <div class="stats-row" id="gt-stats-row"></div>
     <div class="bulk-bar" id="gt-bulk-bar" style="display:none">
@@ -1031,7 +1053,6 @@ document.getElementById('btn-demo-mode').addEventListener('click', ()=>{
   document.getElementById('btn-theme').style.display = 'inline-block';
   document.getElementById('btn-managers-open').style.display = 'inline-block';
   document.getElementById('btn-import').style.display = 'inline-block';
-  document.getElementById('admin-tools-row').style.display = 'flex';
   document.getElementById('bell-wrap').style.display = 'none';
   document.getElementById('btn-history').style.display = 'none';
   document.getElementById('field-manager-text').style.display = 'none';
@@ -1103,7 +1124,6 @@ auth.onAuthStateChanged(async user=>{
     document.getElementById('btn-theme').style.display = 'inline-block';
     document.getElementById('btn-managers-open').style.display = isAdmin ? 'inline-block' : 'none';
     document.getElementById('btn-import').style.display = isAdmin ? 'inline-block' : 'none';
-    document.getElementById('admin-tools-row').style.display = isAdmin ? 'flex' : 'none';
     document.getElementById('bell-wrap').style.display = isAdmin ? 'inline-block' : 'none';
     document.getElementById('btn-history').style.display = isAdmin ? 'inline-block' : 'none';
     document.getElementById('field-manager-text').style.display = isAdmin ? 'none' : 'block';
