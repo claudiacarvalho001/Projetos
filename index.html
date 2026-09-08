@@ -235,7 +235,8 @@
   }
   .draft-row .icon-btn{padding:5px 9px;}
   .bulk-bar #bulk-count{font-weight:600;margin-right:4px;}
-  .table-wrap{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow-sm);}
+  .table-wrap{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto;box-shadow:var(--shadow-sm);}
+  .table-wrap table{min-width:max-content;}
   table{width:100%;border-collapse:collapse;font-size:13px;}
   th{
     font-family:var(--font-mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;
@@ -326,6 +327,13 @@
   .login-card .btn{width:100%;margin-top:8px;text-align:center;padding:11px;}
   .user-badge{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);display:flex;align-items:center;gap:8px;}
   .user-badge .role{padding:3px 9px;border-radius:20px;background:var(--paper);border:1px solid var(--border);}
+  .user-badge .role.role-manager-view{background:#FFD79E;border-color:#FFD79E;color:#5c3d0e;font-weight:600;}
+  .role-toggle-btn{
+    font-family:var(--font-mono);font-size:10.5px;font-weight:600;padding:4px 10px;border-radius:20px;
+    border:1px solid var(--border);background:var(--card-bg);color:var(--ink-soft);cursor:pointer;white-space:nowrap;
+    transition:all .15s ease;
+  }
+  .role-toggle-btn:hover{border-color:var(--primary);color:var(--primary);}
 
   /* SINO DE SOLICITAÇÕES */
   .bell-wrap{position:relative;}
@@ -591,6 +599,7 @@
       <select id="gt-bulk-sector"></select>
       <button class="btn btn-primary" id="gt-bulk-send">Enviar selecionados</button>
       <button class="btn btn-ghost" id="gt-bulk-review">Marcar como revisado</button>
+      <button class="btn btn-ghost" id="gt-bulk-delete" style="display:none;color:var(--brick);border-color:var(--brick)">🗑️ Excluir selecionados</button>
       <button class="btn btn-ghost" id="gt-bulk-clear">Cancelar seleção</button>
     </div>
     <div class="filters">
@@ -605,8 +614,10 @@
         <thead>
           <tr>
             <th style="width:32px"><input type="checkbox" id="gt-select-all"></th>
-            <th>Projeto</th><th>Tags</th><th>Setor</th><th>Setor sugerido</th><th>Área</th><th>Gestor</th><th>Etapa</th>
-            <th>Prioridade</th><th>Progresso</th><th>Início</th><th>Fim</th><th>Status</th>
+            <th data-gtk="name">Projeto</th><th>Tags</th><th data-gtk="sectorName">Setor</th><th>Setor sugerido</th>
+            <th data-gtk="area">Área</th><th data-gtk="manager">Gestor</th><th data-gtk="phase">Etapa</th>
+            <th data-gtk="priority">Prioridade</th><th data-gtk="progress">Progresso</th>
+            <th data-gtk="startDate">Início</th><th data-gtk="endDate">Fim</th><th>Status</th>
           </tr>
         </thead>
         <tbody id="global-table-body"></tbody>
@@ -932,6 +943,8 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 
 let currentUser = null; // {email, isAdmin}
+let viewAsManager = false; // admin alternando pra ver a própria visão como gestor
+function isEffectiveAdmin(){ return !!(currentUser && currentUser.isAdmin && !viewAsManager); }
 let unsubscribeProjects = null;
 let unsubscribeTheme = null;
 let unsubscribePhases = null;
@@ -1087,6 +1100,44 @@ async function isAuthorizedNonAdmin(email){
   }catch(e){ return false; }
 }
 
+function renderUserBadge(){
+  if(!currentUser) return;
+  const label = currentUser.isAdmin
+    ? (viewAsManager ? 'Gestor(a) — visualização' : 'Administrador')
+    : 'Gestor';
+  const toggleHtml = currentUser.isAdmin
+    ? `<button type="button" id="btn-toggle-role" class="role-toggle-btn">${viewAsManager ? '↩ Ver como Admin' : '👤 Ver como Gestor(a)'}</button>`
+    : '';
+  document.getElementById('user-badge').innerHTML =
+    `${escapeHtml(currentUser.email)} <span class="role ${viewAsManager?'role-manager-view':''}">${label}</span>${toggleHtml}`;
+  if(currentUser.isAdmin){
+    document.getElementById('btn-toggle-role').addEventListener('click', toggleViewAsManager);
+  }
+}
+function applyRoleUI(){
+  const isAdmin = isEffectiveAdmin();
+  document.getElementById('header-sub').textContent = isAdmin
+    ? 'DADOS COMPARTILHADOS — visão de administrador (todos os projetos)'
+    : 'Seus projetos como gestor';
+  document.getElementById('btn-phases').style.display = isAdmin ? 'inline-block' : 'none';
+  document.getElementById('btn-theme').style.display = 'inline-block';
+  document.getElementById('btn-managers-open').style.display = isAdmin ? 'inline-block' : 'none';
+  document.getElementById('btn-import').style.display = isAdmin ? 'inline-block' : 'none';
+  document.getElementById('bell-wrap').style.display = isAdmin ? 'inline-block' : 'none';
+  document.getElementById('btn-history').style.display = isAdmin ? 'inline-block' : 'none';
+  document.getElementById('field-manager-text').style.display = isAdmin ? 'none' : 'block';
+  document.getElementById('field-manager-picker').style.display = isAdmin ? 'block' : 'none';
+}
+function toggleViewAsManager(){
+  viewAsManager = !viewAsManager;
+  renderUserBadge();
+  applyRoleUI();
+  subscribeProjects();
+  currentSector = null;
+  backToSectorsUI();
+  toast(viewAsManager ? 'Visualizando como Gestor(a) — só seus próprios projetos' : 'Voltou para a visão de Administrador');
+}
+
 auth.onAuthStateChanged(async user=>{
   if(user){
     let isAdmin = false;
@@ -1115,19 +1166,8 @@ auth.onAuthStateChanged(async user=>{
     currentUser = {email:user.email, isAdmin};
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('app-root').style.display = 'block';
-    document.getElementById('user-badge').innerHTML =
-      `${escapeHtml(user.email)} <span class="role">${isAdmin?'Administrador':'Gestor'}</span>`;
-    document.getElementById('header-sub').textContent = isAdmin
-      ? 'DADOS COMPARTILHADOS — visão de administrador (todos os projetos)'
-      : 'Seus projetos como gestor';
-    document.getElementById('btn-phases').style.display = isAdmin ? 'inline-block' : 'none';
-    document.getElementById('btn-theme').style.display = 'inline-block';
-    document.getElementById('btn-managers-open').style.display = isAdmin ? 'inline-block' : 'none';
-    document.getElementById('btn-import').style.display = isAdmin ? 'inline-block' : 'none';
-    document.getElementById('bell-wrap').style.display = isAdmin ? 'inline-block' : 'none';
-    document.getElementById('btn-history').style.display = isAdmin ? 'inline-block' : 'none';
-    document.getElementById('field-manager-text').style.display = isAdmin ? 'none' : 'block';
-    document.getElementById('field-manager-picker').style.display = isAdmin ? 'block' : 'none';
+    renderUserBadge();
+    applyRoleUI();
     try{
       await db.collection('accessLogs').add({
         email: user.email,
@@ -1350,8 +1390,11 @@ function subscribeData(){
     }, err=>console.error(err));
   }
 
+  subscribeProjects();
+}
+function subscribeProjects(){
   let query = db.collection('projects');
-  if(!currentUser.isAdmin){
+  if(!isEffectiveAdmin()){
     query = query.where('managerEmail','==', currentUser.email);
   }
   if(unsubscribeProjects) unsubscribeProjects();
@@ -1474,7 +1517,7 @@ function renderGlobalDashboard(){
   const byArea = groupByField(inPeriod, 'area');
   html += dashPanelHtml('Progresso médio por área', byArea);
 
-  if(currentUser.isAdmin){
+  if(isEffectiveAdmin()){
     const byManager = groupByField(inPeriod, 'manager');
     html += dashPanelHtml('Progresso médio por gestor', byManager);
   }
@@ -1512,7 +1555,7 @@ function generateReport(scope){
   const gradient = `conic-gradient(#2FBF71 0% ${doneP}%, #F0473C ${doneP}% ${doneP+lateP}%, #0EA5A5 ${doneP+lateP}% 100%)`;
 
   const byArea = groupByField(statsList, 'area');
-  const byManager = currentUser.isAdmin ? groupByField(statsList, 'manager') : null;
+  const byManager = isEffectiveAdmin() ? groupByField(statsList, 'manager') : null;
   let bySector = null;
   if(scope.type === 'global'){
     const map = {};
@@ -1635,7 +1678,7 @@ function renderSectorGrid(){
       : sectorIcon(s.id);
     return `
     <div class="sector-card" data-id="${s.id}">
-      ${currentUser.isAdmin ? `<div class="sector-menu">
+      ${isEffectiveAdmin() ? `<div class="sector-menu">
         <button data-edit="${s.id}" title="Editar">✎</button>
       </div>` : ''}
       <div class="sector-icon">${iconHtml}</div>
@@ -1651,11 +1694,11 @@ function renderSectorGrid(){
       <div class="sector-count">${noneCount} projeto(s)</div>
     </div>`;
   }
-  if(currentUser.isAdmin){
+  if(isEffectiveAdmin()){
     html += `<div class="sector-card add-sector" id="btn-add-sector"><div class="plus">+</div>Novo setor</div>`;
   }
   if(sectors.length===0 && noneCount===0){
-    html = currentUser.isAdmin
+    html = isEffectiveAdmin()
       ? `<div class="sector-card add-sector" id="btn-add-sector" style="grid-column:1/-1"><div class="plus">+</div>Criar o primeiro setor</div>`
       : `<div class="empty" style="grid-column:1/-1">Nenhum setor disponível ainda.</div>`;
   }
@@ -1759,7 +1802,7 @@ function enterSector(s){
   document.getElementById('workspace-actions').style.display = 'flex';
   document.getElementById('btn-new').style.display = (s.id === '__none__') ? 'none' : 'inline-block';
   document.getElementById('header-sub').textContent =
-    (currentUser.isAdmin ? 'Administrador' : 'Gestor') + ' — setor: ' + s.name;
+    (isEffectiveAdmin() ? 'Administrador' : 'Gestor') + ' — setor: ' + s.name;
   switchView('kanban');
 }
 function backToSectorsUI(){
@@ -1768,7 +1811,7 @@ function backToSectorsUI(){
   document.getElementById('btn-back-arrow').style.display = 'none';
   document.getElementById('workspace-view-toggle').style.display = 'none';
   document.getElementById('workspace-actions').style.display = 'none';
-  const isAdmin = currentUser && currentUser.isAdmin;
+  const isAdmin = currentUser && isEffectiveAdmin();
   document.getElementById('header-sub').textContent = isAdmin
     ? 'DADOS COMPARTILHADOS — visão de administrador (todos os projetos)'
     : 'Seus projetos como gestor';
@@ -1887,6 +1930,7 @@ function renderGlobalKanban(){
 // ---- Tabela geral (todos os setores) — centro de comando: ver, importar, selecionar, enviar ----
 let selectedGlobalIds = new Set();
 let gtStatusFilter = null; // null | 'late' | 'done'
+let gtSortKey = null, gtSortAsc = true;
 function showGlobalTable(onlyNew){
   currentSector = null;
   hideAllGlobalViews();
@@ -1895,8 +1939,10 @@ function showGlobalTable(onlyNew){
   document.getElementById('workspace-view-toggle').style.display = 'none';
   document.getElementById('workspace-actions').style.display = 'none';
   document.getElementById('header-sub').textContent = 'Tabela geral — todos os setores';
-  document.getElementById('btn-global-new').style.display = currentUser.isAdmin ? 'inline-block' : 'none';
-  document.getElementById('btn-import').style.display = currentUser.isAdmin ? 'inline-block' : 'none';
+  document.getElementById('btn-global-new').style.display = isEffectiveAdmin() ? 'inline-block' : 'none';
+  document.getElementById('btn-import').style.display = isEffectiveAdmin() ? 'inline-block' : 'none';
+  document.getElementById('gt-bulk-delete').style.display = isEffectiveAdmin() ? 'inline-block' : 'none';
+  gtSortKey = null;
   if(typeof onlyNew === 'boolean') document.getElementById('gt-only-new').checked = onlyNew;
   populateGlobalTableSectorFilter();
   selectedGlobalIds.clear();
@@ -1996,7 +2042,7 @@ function wireDraftRow(){
       name: draftRowData.name.trim(),
       area: draftRowData.area.trim(),
       manager: draftRowData.manager.trim(),
-      managerEmail: currentUser.isAdmin ? '' : currentUser.email,
+      managerEmail: isEffectiveAdmin() ? '' : currentUser.email,
       sector: draftRowData.sector,
       phase: draftRowData.phase,
       priority: draftRowData.priority,
@@ -2053,7 +2099,24 @@ function currentGlobalTableList(){
 }
 function renderGlobalTable(){
   if(!currentUser) return;
-  const list = currentGlobalTableList();
+  let list = currentGlobalTableList();
+  if(gtSortKey){
+    list = [...list].sort((a,b)=>{
+      let av, bv;
+      if(gtSortKey==='phase'){
+        av = phasesForSector(a.sector).findIndex(ph=>ph.id===a.phase);
+        bv = phasesForSector(b.sector).findIndex(ph=>ph.id===b.phase);
+      }else if(gtSortKey==='sectorName'){
+        av = sectors.find(s=>s.id===a.sector)?.name || 'Sem setor';
+        bv = sectors.find(s=>s.id===b.sector)?.name || 'Sem setor';
+      }else{
+        av = a[gtSortKey]||''; bv = b[gtSortKey]||'';
+      }
+      if(av < bv) return gtSortAsc ? -1:1;
+      if(av > bv) return gtSortAsc ? 1:-1;
+      return 0;
+    });
+  }
   const filterLabel = gtStatusFilter==='late' ? ' atrasado(s) — clique de novo para limpar' :
                        gtStatusFilter==='done' ? ' concluído(s) — clique de novo para limpar' : ' projeto(s)';
   document.getElementById('gt-count-label').textContent = list.length + filterLabel;
@@ -2170,6 +2233,24 @@ document.getElementById('gt-bulk-review').addEventListener('click', async ()=>{
   }
   selectedGlobalIds.clear();
   toast('Itens marcados como revisados');
+});
+document.getElementById('gt-bulk-delete').addEventListener('click', async ()=>{
+  if(!isEffectiveAdmin()) return;
+  if(!confirm(`Excluir ${selectedGlobalIds.size} item(ns) selecionado(s)? Essa ação não pode ser desfeita.`)) return;
+  let ok = 0;
+  for(const id of selectedGlobalIds){
+    const success = await deleteProject(id);
+    if(success) ok++;
+  }
+  selectedGlobalIds.clear();
+  toast(`${ok} item(ns) excluído(s)`);
+});
+document.querySelectorAll('th[data-gtk]').forEach(th=>{
+  th.addEventListener('click', ()=>{
+    const k = th.dataset.gtk;
+    if(gtSortKey===k) gtSortAsc = !gtSortAsc; else { gtSortKey=k; gtSortAsc=true; }
+    renderGlobalTable();
+  });
 });
 
 const globalCalendarController = makeCalendarController({
@@ -2686,7 +2767,7 @@ function renderChecklistEditor(){
     const completedLabel = item.completedAt
       ? `<div class="checklist-meta">✓ marcado em ${new Date(item.completedAt).toLocaleString('pt-BR')}</div>`
       : '';
-    const dueField = currentUser.isAdmin
+    const dueField = isEffectiveAdmin()
       ? `<input type="date" class="checklist-due" value="${item.dueDate||''}" data-i="${i}" data-role="due" title="Prazo desta etapa">`
       : (item.dueDate ? `<span class="checklist-due-readonly" title="Prazo definido pelo administrador">📅 ${fmtDate(item.dueDate)}</span>` : '');
     return `
@@ -2866,13 +2947,13 @@ function openNew(phaseId){
   renderTagPicker();
   currentImage = '';
   renderImagePreview();
-  document.getElementById('field-sector-picker').style.display = currentUser.isAdmin ? 'block' : 'none';
+  document.getElementById('field-sector-picker').style.display = isEffectiveAdmin() ? 'block' : 'none';
   renderSectorPicker(currentSector && currentSector.id!=='__none__' ? currentSector.id : null);
-  if(currentUser.isAdmin){
+  if(isEffectiveAdmin()){
     const sectorPhases = phasesForSector(document.getElementById('p-sector').value);
     document.getElementById('p-phase').innerHTML = sectorPhases.map(ph=>`<option value="${ph.id}">${escapeHtml(ph.name)}</option>`).join('');
   }
-  if(currentUser.isAdmin){
+  if(isEffectiveAdmin()){
     document.getElementById('p-manager-picker').value = '';
     document.getElementById('p-manager').value = '';
     document.getElementById('p-manager-email').value = '';
@@ -2903,7 +2984,7 @@ function openEdit(id){
   document.getElementById('p-progress').value = p.progress||0;
   document.getElementById('p-progress-label').textContent = (p.progress||0)+'%';
   document.getElementById('p-manager-email').value = p.managerEmail||'';
-  document.getElementById('field-sector-picker').style.display = currentUser.isAdmin ? 'block' : 'none';
+  document.getElementById('field-sector-picker').style.display = isEffectiveAdmin() ? 'block' : 'none';
   renderSectorPicker(p.sector||null);
   currentChecklist = Array.isArray(p.checklist) ? p.checklist.map(i=>({...i})) : [];
   renderChecklistEditor();
@@ -2913,7 +2994,7 @@ function openEdit(id){
   renderTagPicker();
   currentImage = p.image || '';
   renderImagePreview();
-  document.getElementById('btn-delete').style.display = (currentUser.isAdmin || p.managerEmail===currentUser.email) ? 'inline-block' : 'none';
+  document.getElementById('btn-delete').style.display = (isEffectiveAdmin() || p.managerEmail===currentUser.email) ? 'inline-block' : 'none';
   updateProgressSliderColor();
   modalProject.style.display = 'flex';
 }
@@ -2927,12 +3008,12 @@ modalProject.addEventListener('click', e=>{ if(e.target===modalProject) modalPro
 document.getElementById('btn-save').addEventListener('click', async ()=>{
   const name = document.getElementById('p-name').value.trim();
   if(!name){ toast('Dê um nome ao projeto'); return; }
-  const managerEmail = currentUser.isAdmin
+  const managerEmail = isEffectiveAdmin()
     ? document.getElementById('p-manager-email').value.trim()
     : currentUser.email;
   if(!managerEmail){ toast('Informe o e-mail de login do gestor responsável'); return; }
   const id = document.getElementById('p-id').value;
-  const sectorValue = currentUser.isAdmin
+  const sectorValue = isEffectiveAdmin()
     ? document.getElementById('p-sector').value
     : (currentSector && currentSector.id!=='__none__' ? currentSector.id : (id ? undefined : ''));
   const data = {
@@ -3168,7 +3249,7 @@ document.getElementById('btn-phases-done').addEventListener('click', async ()=>{
   toast('Etapas atualizadas');
 });
 document.getElementById('btn-recalc-progress').addEventListener('click', async ()=>{
-  if(!currentUser.isAdmin){ toast('Apenas administradores podem fazer isso'); return; }
+  if(!isEffectiveAdmin()){ toast('Apenas administradores podem fazer isso'); return; }
   const scopedProjects = projects.filter(matchesSector);
   const eligible = scopedProjects.filter(p => !hasActiveChecklist(p) && phaseBasedProgress(p.phase) !== null);
   if(eligible.length === 0){ toast('Nenhum projeto elegível neste setor (todos têm checklist ou já estão ok)'); return; }
@@ -3477,7 +3558,7 @@ function renderDashboard(){
 
   const byArea = groupByField(inPeriod, 'area');
   html += dashPanelHtml('Progresso médio por área', byArea);
-  if(currentUser.isAdmin){
+  if(isEffectiveAdmin()){
     const byManager = groupByField(inPeriod, 'manager');
     html += dashPanelHtml('Progresso médio por gestor', byManager);
   }
