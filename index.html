@@ -628,6 +628,84 @@
 
   /* --- rodapé --- */
   footer{letter-spacing:0;font-weight:500;}
+
+  /* ==========================================================
+     BARRA LATERAL DE NAVEGAÇÃO
+     ========================================================== */
+  .sidenav{
+    position:fixed;left:0;top:0;bottom:0;width:228px;z-index:40;
+    background:var(--card-bg);border-right:1px solid var(--border);
+    display:none;flex-direction:column;gap:20px;
+    padding:18px 12px 14px;overflow-y:auto;
+    scrollbar-width:thin;scrollbar-color:var(--border) transparent;
+  }
+  body.has-sidenav{padding-left:228px;}
+  body.has-sidenav .sidenav{display:flex;}
+  body.has-sidenav #view-sectors > .global-nav-row{display:none;}
+  body.has-sidenav #workspace-view-toggle{display:none !important;}
+
+  .sn-brand{display:flex;align-items:center;gap:9px;padding:2px 6px 0;}
+  .sn-mark{
+    width:31px;height:31px;border-radius:9px;background:var(--primary);color:#fff;
+    display:flex;align-items:center;justify-content:center;
+    font-size:11px;font-weight:700;letter-spacing:-.01em;flex-shrink:0;
+  }
+  .sn-name{font-size:15px;font-weight:700;letter-spacing:-.03em;color:var(--ink);}
+
+  .sn-group{display:flex;flex-direction:column;gap:2px;}
+  .sn-lbl{
+    font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--ink-soft);padding:0 10px 7px;
+  }
+  .sn-item{
+    display:flex;align-items:center;gap:9px;width:100%;
+    padding:9px 11px;border:0;border-radius:9px;background:none;
+    font-family:var(--font-body);font-size:13.5px;font-weight:600;letter-spacing:-.012em;
+    color:var(--ink);text-align:left;cursor:pointer;transition:background .13s ease;
+  }
+  .sn-item:hover{background:var(--paper);}
+  .sn-item.on{background:var(--primary);color:#fff;}
+  .sn-item:focus-visible{outline:2px solid var(--primary);outline-offset:1px;}
+  .sn-item .sn-txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .sn-badge{
+    background:var(--brick);color:#fff;font-size:10px;font-weight:700;
+    border-radius:20px;padding:1px 6px;min-width:17px;text-align:center;flex-shrink:0;
+  }
+  .sn-item.on .sn-badge{background:rgba(255,255,255,.28);}
+
+  .sn-sector{
+    display:flex;align-items:center;gap:9px;width:100%;
+    padding:7px 11px;border:0;border-radius:8px;background:none;
+    font-family:var(--font-body);font-size:12.5px;font-weight:500;
+    color:var(--ink-soft);text-align:left;cursor:pointer;
+  }
+  .sn-sector:hover{background:var(--paper);color:var(--ink);}
+  .sn-sector{align-items:flex-start;}
+  .sn-sector .sn-dot{width:8px;height:8px;border-radius:3px;flex-shrink:0;background:var(--primary);margin-top:5px;}
+  .sn-sector .sn-txt{white-space:normal;line-height:1.35;}
+  .sn-sector.on{color:var(--ink);font-weight:700;background:var(--paper);}
+
+  .sn-foot{
+    margin-top:auto;padding:12px 10px 0;border-top:1px solid var(--border);
+    font-size:11.5px;color:var(--ink-soft);line-height:1.45;word-break:break-word;
+  }
+  .sn-foot b{
+    display:block;color:var(--ink);font-size:12.5px;font-weight:700;letter-spacing:-.01em;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+
+  @media (max-width:900px){
+    body.has-sidenav{padding-left:0;}
+    .sidenav{
+      position:static;width:auto;flex-direction:row;align-items:center;gap:6px;
+      border-right:0;border-bottom:1px solid var(--border);
+      padding:10px 12px;overflow-x:auto;overflow-y:hidden;
+    }
+    .sidenav .sn-lbl,.sidenav .sn-foot,.sidenav #sn-group-setores{display:none;}
+    .sidenav .sn-group{flex-direction:row;gap:4px;}
+    .sn-item{white-space:nowrap;padding:8px 12px;}
+    .sn-brand{padding:0 6px 0 0;}
+  }
 </style>
 </head>
 <body>
@@ -657,6 +735,38 @@
 </div>
 
 <div id="app-root" style="display:none">
+<aside class="sidenav" id="sidenav" aria-label="Navegação principal">
+  <div class="sn-brand"><span class="sn-mark">COU</span><span class="sn-name">Projetos</span></div>
+
+  <nav class="sn-group">
+    <span class="sn-lbl">Geral</span>
+    <button type="button" class="sn-item" data-go="__sectors"><span class="sn-txt">Setores</span></button>
+    <button type="button" class="sn-item" data-go="btn-global-kanban"><span class="sn-txt">Kanban geral</span></button>
+    <button type="button" class="sn-item" data-go="btn-global-table"><span class="sn-txt">Tabela geral</span></button>
+    <button type="button" class="sn-item" data-go="btn-toggle-gdash"><span class="sn-txt">Dashboard geral</span></button>
+    <button type="button" class="sn-item" data-go="btn-global-calendar"><span class="sn-txt">Calendário geral</span></button>
+    <button type="button" class="sn-item" data-go="btn-mural"><span class="sn-txt">Mural</span><span class="sn-badge" id="sn-mural-badge" style="display:none">0</span></button>
+    <button type="button" class="sn-item" data-go="btn-global-report"><span class="sn-txt">Relatório geral (PDF)</span></button>
+    <button type="button" class="sn-item" data-go="btn-managers-open" id="sn-managers" style="display:none"><span class="sn-txt">Gestores</span></button>
+    <button type="button" class="sn-item" data-go="btn-history" id="sn-history" style="display:none"><span class="sn-txt">Histórico</span></button>
+  </nav>
+
+  <nav class="sn-group" id="sn-group-setor" style="display:none">
+    <span class="sn-lbl" id="sn-sector-label">Setor atual</span>
+    <button type="button" class="sn-item" data-go="tab-kanban"><span class="sn-txt">Kanban</span></button>
+    <button type="button" class="sn-item" data-go="tab-table"><span class="sn-txt">Tabela</span></button>
+    <button type="button" class="sn-item" data-go="tab-dashboard"><span class="sn-txt">Dashboard</span></button>
+    <button type="button" class="sn-item" data-go="tab-calendar"><span class="sn-txt">Calendário</span></button>
+  </nav>
+
+  <nav class="sn-group" id="sn-group-setores" style="display:none">
+    <span class="sn-lbl">Ir para o setor</span>
+    <div id="sn-sector-list"></div>
+  </nav>
+
+  <div class="sn-foot" id="sn-foot"></div>
+</aside>
+
 <div class="app">
   <header>
     <div class="header-row header-row-top">
@@ -887,7 +997,7 @@
 </div>
 </div>
 
-<footer>Desenvolvido por Claudia Conde Carvalho — Centro de Operações Urbam</footer>
+<footer>Desenvolvido por Claudia Conde Carvalho — Centro de Operações Urbam <span style="opacity:.55">· visual v2</span></footer>
 
 <div class="toast" id="toast"></div>
 
@@ -1399,6 +1509,15 @@ const THEME_PRESETS = [
   {name:'Uva Doce', paper:'#F6F0FB', card:'#FFFFFF', ink:'#3A1258', teal:'#8E5FE8', amber:'#F5A623', brick:'#E8517A', sage:'#7BC67E'},
   {name:'Menta Fresca', paper:'#EFFAF6', card:'#FFFFFF', ink:'#0E3B2E', teal:'#26C6A6', amber:'#F2A93B', brick:'#EF6C6C', sage:'#3DAA6E'}
 ];
+// Tema padrão anterior (antes do visual azul). Quem tinha exatamente
+// este tema salvo migra automaticamente para o novo padrão.
+const LEGACY_THEME = {paper:'#EEEFF7', card:'#FBF9F4', ink:'#1F3552', teal:'#3E7C74', amber:'#FFC400', brick:'#FF1E1E', sage:'#00E676'};
+function isLegacyTheme(t){
+  if(!t) return false;
+  return Object.keys(LEGACY_THEME).every(k =>
+    String(t[k]||'').trim().toUpperCase() === LEGACY_THEME[k].toUpperCase()
+  );
+}
 let theme = {...DEFAULT_THEME};
 
 function applyTheme(t){
@@ -1410,7 +1529,8 @@ function applyTheme(t){
 async function loadTheme(){
   try{
     const doc = await db.collection('userPrefs').doc(currentUser.email).get();
-    theme = (doc.exists && doc.data().theme) ? {...DEFAULT_THEME, ...doc.data().theme} : {...DEFAULT_THEME};
+    const saved = (doc.exists && doc.data().theme) ? doc.data().theme : null;
+    theme = (saved && !isLegacyTheme(saved)) ? {...DEFAULT_THEME, ...saved} : {...DEFAULT_THEME};
   }catch(e){ theme = {...DEFAULT_THEME}; }
   applyTheme(theme);
 }
@@ -4057,6 +4177,149 @@ document.getElementById('import-file-input').addEventListener('change', async e=
 });
 
 // Carregamento inicial de dados agora é disparado por subscribeData() após o login (auth.onAuthStateChanged)
+
+
+/* ============================================================
+   BARRA LATERAL — aciona os controles originais do painel.
+   Nenhuma lógica existente foi reescrita: cada item apenas
+   dispara o clique do botão correspondente que já existia.
+   ============================================================ */
+(function(){
+  var sidenav = document.getElementById('sidenav');
+  if(!sidenav) return;
+
+  function el(id){ return document.getElementById(id); }
+  function shown(node){ return !!node && node.style.display !== 'none'; }
+
+  /* --- navegação: proxy para os botões originais --- */
+  sidenav.addEventListener('click', function(ev){
+    var btn = ev.target.closest('.sn-item');
+    if(!btn) return;
+    var target = btn.dataset.go;
+    var origin = el(target === '__sectors' ? 'btn-back-arrow' : target);
+    if(origin) origin.click();
+  });
+
+  /* --- lista de setores na barra --- */
+  var lastSectorSignature = '';
+  function renderSidenavSectors(){
+    var grid = el('sector-grid');
+    var box  = el('sn-sector-list');
+    var group = el('sn-group-setores');
+    if(!grid || !box || !group) return;
+
+    var cards = Array.prototype.filter.call(
+      grid.querySelectorAll('.sector-card'),
+      function(c){ return !c.classList.contains('add-sector'); }
+    );
+    var names = cards.map(function(c){
+      var n = c.querySelector('.sector-name');
+      return n ? n.textContent.trim() : '';
+    });
+    var signature = names.join('|');
+    if(signature === lastSectorSignature) return;
+    lastSectorSignature = signature;
+
+    box.innerHTML = '';
+    if(!cards.length){ group.style.display = 'none'; return; }
+    group.style.display = 'flex';
+
+    cards.forEach(function(card, i){
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'sn-sector';
+      b.innerHTML = '<span class="sn-dot"></span><span class="sn-txt"></span>';
+      b.querySelector('.sn-txt').textContent = names[i] || 'Sem nome';
+      b.title = names[i] || '';
+      b.addEventListener('click', function(){ card.click(); });
+      box.appendChild(b);
+    });
+  }
+
+  /* --- sincroniza estado visual com o painel --- */
+  function syncSidenav(){
+    var root = el('app-root');
+    var logged = !!root && root.style.display !== 'none';
+    document.body.classList.toggle('has-sidenav', logged);
+    if(!logged) return;
+
+    /* itens que só o administrador enxerga */
+    var pairs = [['sn-managers','btn-managers-open'], ['sn-history','btn-history']];
+    pairs.forEach(function(pair){
+      var mine = el(pair[0]), origin = el(pair[1]);
+      if(mine) mine.style.display = shown(origin) ? 'flex' : 'none';
+    });
+
+    /* contador de avisos não lidos do mural */
+    var badgeOrigin = el('mural-badge'), badgeMine = el('sn-mural-badge');
+    if(badgeMine){
+      if(shown(badgeOrigin) && badgeOrigin.textContent.trim()){
+        badgeMine.textContent = badgeOrigin.textContent.trim();
+        badgeMine.style.display = 'inline-block';
+      } else {
+        badgeMine.style.display = 'none';
+      }
+    }
+
+    /* seção do setor aberto */
+    var inSector = shown(el('project-workspace'));
+    var sectorGroup = el('sn-group-setor');
+    if(sectorGroup) sectorGroup.style.display = inSector ? 'flex' : 'none';
+    if(inSector){
+      var label = el('sn-sector-label');
+      var sub = el('header-sub');
+      if(label && sub && sub.textContent.trim()) label.textContent = sub.textContent.trim();
+    }
+
+    /* qual item fica destacado */
+    var active = null;
+    if(inSector){
+      var tab = document.querySelector('#workspace-view-toggle button.active');
+      if(tab) active = tab.id;
+    } else if(shown(el('view-mural'))){            active = 'btn-mural';
+    } else if(shown(el('view-global-kanban'))){    active = 'btn-global-kanban';
+    } else if(shown(el('view-global-table'))){     active = 'btn-global-table';
+    } else if(shown(el('view-global-calendar'))){  active = 'btn-global-calendar';
+    } else if(shown(el('view-global-dashboard'))){ active = 'btn-toggle-gdash';
+    } else if(shown(el('view-sectors'))){          active = '__sectors';
+    }
+    sidenav.querySelectorAll('.sn-item').forEach(function(b){
+      b.classList.toggle('on', b.dataset.go === active);
+    });
+
+    /* rodapé com quem está logado */
+    var badge = el('user-badge'), foot = el('sn-foot');
+    if(badge && foot){
+      var role = badge.querySelector('.role');
+      var roleText = role ? role.textContent.trim() : '';
+      var who = badge.textContent.replace(roleText, '').trim();
+      if(who){
+        foot.innerHTML = '<b></b><span></span>';
+        foot.querySelector('b').textContent = who;
+        foot.querySelector('b').title = who;
+        foot.querySelector('span').textContent = roleText;
+      }
+    }
+
+    renderSidenavSectors();
+  }
+
+  /* dispara quando o painel troca de tela, sem ficar varrendo o DOM à toa */
+  var queued = false;
+  function schedule(){
+    if(queued) return;
+    queued = true;
+    requestAnimationFrame(function(){ queued = false; syncSidenav(); });
+  }
+  new MutationObserver(function(records){
+    for(var i = 0; i < records.length; i++){
+      if(!sidenav.contains(records[i].target)){ schedule(); return; }
+    }
+  }).observe(document.body, {subtree:true, childList:true, attributes:true, attributeFilter:['style','class']});
+
+  setInterval(syncSidenav, 1500);
+  syncSidenav();
+})();
 
 </script>
 </body>
