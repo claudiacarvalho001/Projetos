@@ -1703,6 +1703,7 @@ function subscribeData(){
       populateGlobalTableSectorFilter();
       renderGlobalTable();
     }
+    compressExistingSectorIcons();
   }, err=>console.error(err));
 
   if(unsubscribeTags) unsubscribeTags();
@@ -1756,8 +1757,43 @@ function subscribeProjects(){
   });
 }
 async function saveSectors(){
-  try{ await db.collection('config').doc('sectors').set({list: sectors}); }
-  catch(e){ toast('Erro ao salvar setores (verifique permissões)'); }
+  if(JSON.stringify(sectors).length > 950000){
+    toast('Os ícones dos setores ocupam espaço demais no Firebase. Use uma imagem menor ou remova alguns ícones.');
+    return false;
+  }
+  try{ await db.collection('config').doc('sectors').set({list: sectors}); return true; }
+  catch(e){
+    console.error(e);
+    toast('Não foi possível salvar os setores (' + (e.code || e.message) + ')');
+    return false;
+  }
+}
+
+// Reduz ícones de setores antigos (guardados grandes demais) para liberar espaço no Firebase
+const sectorIconsTried = new Set();
+let compressingSectorIcons = false;
+async function compressExistingSectorIcons(){
+  if(compressingSectorIcons || !currentUser || !currentUser.isAdmin) return;
+  const big = sectors.filter(s => s.icon && s.icon.length > 20000 && !sectorIconsTried.has(s.id));
+  if(big.length === 0) return;
+  compressingSectorIcons = true;
+  try{
+    const newIcons = {};
+    for(const s of big){
+      sectorIconsTried.add(s.id);
+      try{
+        const img = await loadImage(s.icon);
+        const out = drawToJpeg(img, 128, 128, true, 0.82);
+        if(out.length < s.icon.length) newIcons[s.id] = out;
+      }catch(err){ console.error(err); }
+    }
+    if(Object.keys(newIcons).length > 0){
+      sectors = sectors.map(s => newIcons[s.id] ? {...s, icon: newIcons[s.id]} : s);
+      if(await saveSectors()) toast('Ícones dos setores otimizados para liberar espaço');
+    }
+  }finally{
+    compressingSectorIcons = false;
+  }
 }
 
 // ---- Setores ----
@@ -2233,7 +2269,7 @@ document.getElementById('sector-image-input').addEventListener('change', async e
   const file = e.target.files[0];
   if(!file) return;
   try{
-    currentSectorImage = await resizeImageFile(file);
+    currentSectorImage = await resizeImageFile(file, {maxW:128, maxH:128, square:true, quality:0.82});
     renderSectorImagePreview();
   }catch(err){ toast('Não foi possível processar a imagem'); }
   e.target.value = '';
@@ -2248,13 +2284,19 @@ document.getElementById('btn-sector-save').addEventListener('click', async ()=>{
   const name = document.getElementById('sector-name').value.trim();
   if(!name){ toast('Dê um nome ao setor'); return; }
   const id = document.getElementById('sector-id').value;
+  const backup = JSON.parse(JSON.stringify(sectors));
   if(id){
     const s = sectors.find(x=>x.id===id);
     if(s){ s.name = name; s.icon = currentSectorImage; }
   }else{
     sectors.push({id:'sec_'+Date.now().toString(36), name, icon: currentSectorImage});
   }
-  await saveSectors();
+  const ok = await saveSectors();
+  if(!ok){
+    sectors = backup;
+    renderSectorGrid();
+    return;
+  }
   modalSector.style.display = 'none';
   toast('Setor salvo');
 });
@@ -2754,7 +2796,16 @@ async function saveProject(id, data){
   try{
     if(id){ await db.collection('projects').doc(id).update(data); return true; }
     else{ const ref = await db.collection('projects').add(data); return ref.id; }
-  }catch(e){ console.error(e); toast('Erro ao salvar projeto (verifique permissões)'); return false; }
+  }catch(e){
+    console.error(e);
+    const msg = (e && e.code === 'resource-exhausted')
+      ? 'Limite diário do Firebase atingido — tente novamente amanhã'
+      : (e && /size|exceeds|too large/i.test(e.message || ''))
+        ? 'Projeto grande demais — use uma foto de capa menor'
+        : 'Erro ao salvar projeto (verifique permissões)';
+    toast(msg);
+    return false;
+  }
 }
 async function deleteProject(id){
   try{ await db.collection('projects').doc(id).delete(); return true; }
@@ -3327,23 +3378,43 @@ document.getElementById('p-phase').addEventListener('change', e=>{
 });
 document.getElementById('p-end').addEventListener('change', updateProgressSliderColor);
 
-function resizeImageFile(file){
+function drawToJpeg(img, maxW, maxH, square, quality){
+  let sx = 0, sy = 0, sw = img.width, sh = img.height, cw, ch;
+  if(square){
+    const side = Math.min(img.width, img.height);
+    sx = (img.width - side)/2; sy = (img.height - side)/2; sw = side; sh = side;
+    cw = ch = Math.min(maxW, side);
+  }else{
+    const scale = Math.min(1, maxW/img.width, maxH/img.height);
+    cw = Math.max(1, Math.round(img.width*scale));
+    ch = Math.max(1, Math.round(img.height*scale));
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = cw; canvas.height = ch;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cw, ch);
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, cw, ch);
+  let q = quality, out = canvas.toDataURL('image/jpeg', q);
+  while(out.length > 250000 && q > 0.35){ q -= 0.12; out = canvas.toDataURL('image/jpeg', q); }
+  return out;
+}
+function loadImage(src){
+  return new Promise((resolve, reject)=>{
+    const i = new Image();
+    i.onload = ()=>resolve(i);
+    i.onerror = reject;
+    i.src = src;
+  });
+}
+function resizeImageFile(file, opts){
+  opts = opts || {};
   return new Promise((resolve, reject)=>{
     const reader = new FileReader();
-    reader.onload = e=>{
-      const img = new Image();
-      img.onload = ()=>{
-        const maxW = 480;
-        const scale = Math.min(1, maxW/img.width);
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width*scale;
-        canvas.height = img.height*scale;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', 0.72));
-      };
-      img.onerror = reject;
-      img.src = e.target.result;
+    reader.onload = async e=>{
+      try{
+        const img = await loadImage(e.target.result);
+        resolve(drawToJpeg(img, opts.maxW || 480, opts.maxH || 480, !!opts.square, opts.quality || 0.72));
+      }catch(err){ reject(err); }
     };
     reader.onerror = reject;
     reader.readAsDataURL(file);
