@@ -1756,8 +1756,9 @@ function subscribeProjects(){
     toast('Erro ao carregar projetos (verifique as regras do Firestore)');
   });
 }
-async function saveSectors(){
-  if(JSON.stringify(sectors).length > 950000){
+async function saveSectors(opts){
+  // Só bloqueia se passar do limite; exclusões (que diminuem o documento) sempre tentam gravar
+  if(!(opts && opts.shrinking) && JSON.stringify(sectors).length > 950000){
     toast('Os ícones dos setores ocupam espaço demais no Firebase. Use uma imagem menor ou remova alguns ícones.');
     return false;
   }
@@ -2305,9 +2306,16 @@ document.getElementById('btn-delete-sector').addEventListener('click', async ()=
   const s = sectors.find(x=>x.id===id);
   if(!s) return;
   if(!confirm(`Excluir o setor "${s.name}"? Os projetos dele não serão apagados, mas ficarão em "Sem setor" até você reatribuí-los.`)) return;
+  const backup = JSON.parse(JSON.stringify(sectors));
   sectors = sectors.filter(x=>x.id!==id);
-  await saveSectors();
+  const ok = await saveSectors({shrinking:true});
+  if(!ok){
+    sectors = backup;   // não conseguiu gravar: o setor volta e a mensagem de erro já foi mostrada
+    renderSectorGrid();
+    return;
+  }
   modalSector.style.display = 'none';
+  renderSectorGrid();
   toast('Setor excluído');
 });
 
