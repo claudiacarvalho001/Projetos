@@ -1282,6 +1282,9 @@ let accessRequests = [];
 let managers = [];
 let notices = [];
 let sectors = [];
+let sectorsRaw = [];
+let sectorIconMap = {};
+let unsubscribeSectorIcons = null;
 let tagRegistry = [];
 let currentSector = null; // {id, name} | null
 
@@ -1695,15 +1698,18 @@ function subscribeData(){
 
   if(unsubscribeSectors) unsubscribeSectors();
   unsubscribeSectors = db.collection('config').doc('sectors').onSnapshot(doc=>{
-    sectors = doc.exists && doc.data().list ? doc.data().list : [];
-    renderSectorGrid();
-    renderGlobalDashboard();
-    if(document.getElementById('view-global-kanban').style.display==='block') renderGlobalKanban();
-    if(document.getElementById('view-global-table').style.display==='block'){
-      populateGlobalTableSectorFilter();
-      renderGlobalTable();
-    }
-    compressExistingSectorIcons();
+    sectorsRaw = doc.exists && doc.data().list ? doc.data().list : [];
+    rebuildSectors();
+    migrateSectorIcons();
+  }, err=>console.error(err));
+
+  // Ícones ficam em documentos separados (config/icon_<id>) para não estourar o limite de 1 MB
+  if(unsubscribeSectorIcons) unsubscribeSectorIcons();
+  const FP = firebase.firestore.FieldPath.documentId();
+  unsubscribeSectorIcons = db.collection('config').where(FP,'>=','icon_').where(FP,'<','icon`').onSnapshot(snap=>{
+    sectorIconMap = {};
+    snap.docs.forEach(d=>{ sectorIconMap[d.id.slice(5)] = (d.data().data || ''); });
+    rebuildSectors();
   }, err=>console.error(err));
 
   if(unsubscribeTags) unsubscribeTags();
@@ -1756,44 +1762,63 @@ function subscribeProjects(){
     toast('Erro ao carregar projetos (verifique as regras do Firestore)');
   });
 }
-async function saveSectors(opts){
-  // Só bloqueia se passar do limite; exclusões (que diminuem o documento) sempre tentam gravar
-  if(!(opts && opts.shrinking) && JSON.stringify(sectors).length > 950000){
-    toast('Os ícones dos setores ocupam espaço demais no Firebase. Use uma imagem menor ou remova alguns ícones.');
-    return false;
+function rebuildSectors(){
+  sectors = sectorsRaw.map(x=>({...x, icon: sectorIconMap[x.id] || x.icon || ''}));
+  renderSectorGrid();
+  renderGlobalDashboard();
+  if(document.getElementById('view-global-kanban').style.display==='block') renderGlobalKanban();
+  if(document.getElementById('view-global-table').style.display==='block'){
+    populateGlobalTableSectorFilter();
+    renderGlobalTable();
   }
-  try{ await db.collection('config').doc('sectors').set({list: sectors}); return true; }
-  catch(e){
+}
+async function saveSectors(){
+  try{
+    const batch = db.batch();
+    const list = sectors.map(x=>{ const {icon, ...rest} = x; return rest; });
+    sectors.forEach(x=>{
+      const cur = sectorIconMap[x.id] || '';
+      const ic = x.icon || '';
+      if(ic !== cur){
+        const ref = db.collection('config').doc('icon_' + x.id);
+        if(ic) batch.set(ref, {data: ic}); else batch.delete(ref);
+      }
+    });
+    // ícones de setores que foram excluídos
+    Object.keys(sectorIconMap).forEach(id=>{
+      if(!sectors.some(x=>x.id===id)) batch.delete(db.collection('config').doc('icon_' + id));
+    });
+    batch.set(db.collection('config').doc('sectors'), {list});
+    await batch.commit();
+    return true;
+  }catch(e){
     console.error(e);
     toast('Não foi possível salvar os setores (' + (e.code || e.message) + ')');
     return false;
   }
 }
 
-// Reduz ícones de setores antigos (guardados grandes demais) para liberar espaço no Firebase
-const sectorIconsTried = new Set();
-let compressingSectorIcons = false;
-async function compressExistingSectorIcons(){
-  if(compressingSectorIcons || !currentUser || !currentUser.isAdmin) return;
-  const big = sectors.filter(s => s.icon && s.icon.length > 20000 && !sectorIconsTried.has(s.id));
-  if(big.length === 0) return;
-  compressingSectorIcons = true;
+// Move ícones antigos (que estavam dentro da lista de setores) para documentos próprios
+let migratingSectorIcons = false;
+async function migrateSectorIcons(){
+  if(migratingSectorIcons || !currentUser || !currentUser.isAdmin) return;
+  if(!sectorsRaw.some(x=>x.icon)) return;
+  migratingSectorIcons = true;
   try{
-    const newIcons = {};
-    for(const s of big){
-      sectorIconsTried.add(s.id);
-      try{
-        const img = await loadImage(s.icon);
-        const out = drawToJpeg(img, 128, 128, true, 0.82);
-        if(out.length < s.icon.length) newIcons[s.id] = out;
-      }catch(err){ console.error(err); }
+    const merged = sectorsRaw.map(x=>({...x, icon: sectorIconMap[x.id] || x.icon || ''}));
+    for(const x of merged){
+      if(x.icon && x.icon.length > 30000){
+        try{
+          const img = await loadImage(x.icon);
+          const out = drawToJpeg(img, 128, 128, true, 0.82);
+          if(out.length < x.icon.length) x.icon = out;
+        }catch(err){ console.error(err); }
+      }
     }
-    if(Object.keys(newIcons).length > 0){
-      sectors = sectors.map(s => newIcons[s.id] ? {...s, icon: newIcons[s.id]} : s);
-      if(await saveSectors()) toast('Ícones dos setores otimizados para liberar espaço');
-    }
+    sectors = merged;
+    if(await saveSectors()) toast('Ícones dos setores reorganizados');
   }finally{
-    compressingSectorIcons = false;
+    migratingSectorIcons = false;
   }
 }
 
