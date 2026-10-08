@@ -2186,7 +2186,9 @@ function renderSectorGrid(){
   const grid = document.getElementById('sector-grid');
   if(!grid) return;
   const noneCount = projectsForSector('__none__').length;
-  let html = sectors.map(s=>{
+  const onlyMine = !isEffectiveAdmin();
+  const visibleSectors = onlyMine ? sectors.filter(s=>projectsForSector(s.id).length>0) : sectors;
+  let html = visibleSectors.map(s=>{
     const count = projectsForSector(s.id).length;
     const iconHtml = s.icon
       ? `<img src="${s.icon}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:10px">`
@@ -2212,10 +2214,10 @@ function renderSectorGrid(){
   if(isEffectiveAdmin()){
     html += `<div class="sector-card add-sector" id="btn-add-sector"><div class="plus">+</div>Novo setor</div>`;
   }
-  if(sectors.length===0 && noneCount===0){
+  if(visibleSectors.length===0 && noneCount===0){
     html = isEffectiveAdmin()
       ? `<div class="sector-card add-sector" id="btn-add-sector" style="grid-column:1/-1"><div class="plus">+</div>Criar o primeiro setor</div>`
-      : `<div class="empty" style="grid-column:1/-1">Nenhum setor disponível ainda.</div>`;
+      : `<div class="empty" style="grid-column:1/-1">Você ainda não tem projetos atribuídos.</div>`;
   }
   grid.innerHTML = html;
 
@@ -2809,7 +2811,7 @@ async function saveProject(id, data){
     const msg = (e && e.code === 'resource-exhausted')
       ? 'Limite diário do Firebase atingido — tente novamente amanhã'
       : (e && /size|exceeds|too large/i.test(e.message || ''))
-        ? 'Projeto grande demais — use uma foto de capa menor'
+        ? 'Projeto grande demais para o Firebase (limite de 1 MB por projeto) — tente uma foto de capa menor ou reduza o texto das etapas'
         : 'Erro ao salvar projeto (verifique permissões)';
     toast(msg);
     return false;
@@ -3386,24 +3388,32 @@ document.getElementById('p-phase').addEventListener('change', e=>{
 });
 document.getElementById('p-end').addEventListener('change', updateProgressSliderColor);
 
-function drawToJpeg(img, maxW, maxH, square, quality){
-  let sx = 0, sy = 0, sw = img.width, sh = img.height, cw, ch;
-  if(square){
-    const side = Math.min(img.width, img.height);
-    sx = (img.width - side)/2; sy = (img.height - side)/2; sw = side; sh = side;
-    cw = ch = Math.min(maxW, side);
-  }else{
-    const scale = Math.min(1, maxW/img.width, maxH/img.height);
-    cw = Math.max(1, Math.round(img.width*scale));
-    ch = Math.max(1, Math.round(img.height*scale));
+function drawToJpeg(img, maxW, maxH, square, quality, maxChars){
+  maxChars = maxChars || 250000;
+  let sx = 0, sy = 0, sw = img.width, sh = img.height;
+  let k = 1, out = '';
+  for(let attempt = 0; attempt < 6; attempt++){
+    let cw, ch;
+    if(square){
+      const side = Math.min(img.width, img.height);
+      sx = (img.width - side)/2; sy = (img.height - side)/2; sw = side; sh = side;
+      cw = ch = Math.max(1, Math.round(Math.min(maxW*k, side)));
+    }else{
+      const scale = Math.min(1, maxW*k/img.width, maxH*k/img.height);
+      cw = Math.max(1, Math.round(img.width*scale));
+      ch = Math.max(1, Math.round(img.height*scale));
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = cw; canvas.height = ch;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cw, ch);
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, cw, ch);
+    let q = quality;
+    out = canvas.toDataURL('image/jpeg', q);
+    while(out.length > maxChars && q > 0.45){ q -= 0.1; out = canvas.toDataURL('image/jpeg', q); }
+    if(out.length <= maxChars) return out;
+    k *= 0.8;   // ainda grande: reduz as dimensões e tenta de novo
   }
-  const canvas = document.createElement('canvas');
-  canvas.width = cw; canvas.height = ch;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cw, ch);
-  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, cw, ch);
-  let q = quality, out = canvas.toDataURL('image/jpeg', q);
-  while(out.length > 250000 && q > 0.35){ q -= 0.12; out = canvas.toDataURL('image/jpeg', q); }
   return out;
 }
 function loadImage(src){
@@ -3421,7 +3431,7 @@ function resizeImageFile(file, opts){
     reader.onload = async e=>{
       try{
         const img = await loadImage(e.target.result);
-        resolve(drawToJpeg(img, opts.maxW || 480, opts.maxH || 480, !!opts.square, opts.quality || 0.72));
+        resolve(drawToJpeg(img, opts.maxW || 1280, opts.maxH || 1280, !!opts.square, opts.quality || 0.85, opts.maxChars));
       }catch(err){ reject(err); }
     };
     reader.onerror = reject;
